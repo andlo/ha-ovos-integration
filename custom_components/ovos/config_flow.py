@@ -1,4 +1,4 @@
-"""Config flow for OpenVoiceOS shared config.
+"""Config flow for OpenVoiceOS.
 
 Pre-fills suggested values from hass.config — see DEVELOPER.md's HA Core ->
 mycroft.conf field mapping table for exactly which fields and why. These are
@@ -56,7 +56,7 @@ class OvosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             return self.async_create_entry(
-                title="OpenVoiceOS shared config", data=user_input
+                title="OpenVoiceOS", data=user_input
             )
 
         suggested = {

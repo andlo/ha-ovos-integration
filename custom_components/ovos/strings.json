@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "OpenVoiceOS shared config",
+        "title": "OpenVoiceOS",
         "description": "Pre-filled from your Home Assistant settings where possible \u2014 edit anything that doesn't match what you want OVOS to use.",
         "data": {
           "lang": "Language",
