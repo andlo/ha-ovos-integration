@@ -60,11 +60,26 @@ itself, no ambiguity.
 GitHub API, genuinely small enough for a dropdown; see `haos-ovos-addons`'s `ovos-skills/DOCS.md`
 for the count and how it was checked). Picking one calls `ovos-skills`'s install API.
 
-**Per-subentry config**: generated from that skill's `settingsmeta.json` — the same
-number/select/text/switch entity types this integration already uses for shared config,
-just scoped to one skill's settings instead of the shared file.
+**Per-subentry config**: a `reconfigure` step on the subentry. Confirmed for real by
+installing multiple skills and reading their actual `settingsmeta.json` (or lack of one):
+not every skill has one (`date-time` does, `fallback-chatgpt` doesn't), and the only field
+type confirmed against real data is `checkbox` — its `settingsmeta.json` `"value"` is
+literally the string `"false"`, not a JSON boolean, which the reconfigure flow normalizes.
+Any skill without a settingsmeta, or with field types we haven't confirmed how to map yet
+(e.g. `select`, seen mentioned in an OVOS community discussion but not verified against real
+data), falls back to a single raw-JSON editor for its `settings.json` — same pattern already
+used for TTS/STT plugin config and persona's solver list, rather than guessing at an unseen
+schema.
 
-**Remove flow**: deleting the subentry calls the same add-on's uninstall API.
+Also surfaced a real gotcha: the catalog's `package_name` field doesn't always match what pip
+actually installs a skill as (confirmed: catalog says `ovos-skill-ovos-fallback-chatgpt`,
+real installed name is `skill-ovos-fallback-chatgpt`) — `ovos-skills`' settingsmeta lookup
+does a normalized fuzzy match against actually-installed packages instead of trusting the
+catalog's name literally.
+
+**Remove flow**: deleting the subentry calls the same add-on's uninstall API — currently a
+known-broken stub on the `ovos-skills` side (see that repo's `DOCS.md`), not yet wired up
+here since there's nothing working to call yet.
 
 **What this explicitly does NOT do**: make the skill respond to voice queries. Installing and
 configuring a skill here doesn't wire it into Assist — that needs OVOS's messagebus/HiveMind,
