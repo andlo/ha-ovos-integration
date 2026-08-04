@@ -5,9 +5,11 @@
 
 <img src="logo.png" width="96" height="96" alt="OpenVoiceOS logo">
 
-> 🚧 **Work in progress — code exists, never installed on a real Home Assistant yet.**
-> Syntax-checked and the shared-file merge logic is unit-tested in isolation, but the
-> integration itself (config flow, entities) has not been loaded by real Home Assistant Core.
+> 🚧 **Work in progress — v0.0.2, first real install confirmed working, with one bug already
+> caught and fixed.** Config flow pre-fill, initial writes, and all three entity platforms
+> verified end-to-end on real Home Assistant Core. v0.0.1 had a restart-persistence bug
+> (entities re-initialized from the original config-flow submission instead of the current
+> shared file) — fixed in v0.0.2, not yet re-verified across an actual restart.
 
 A Home Assistant **integration** (HACS-distributed `custom_component`, not a Supervisor
 add-on) for configuring OVOS the way HAOS users already configure everything else: as
