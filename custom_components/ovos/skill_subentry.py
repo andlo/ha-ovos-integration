@@ -4,9 +4,19 @@ Add flow: dropdown of the official catalog (36 skills, confirmed small
 enough — see haos-ovos-addons/ovos-skills/DOCS.md), picking one calls that
 add-on's /skills/install (fire-and-poll, matching its own async design —
 see that repo's DEVELOPER.md for why a blocking call would be wrong here).
+
+Reconfigure flow: edits a skill's settings.json. Not every skill ships a
+settingsmeta.json describing its fields — confirmed for real by installing
+two different skills, one had it, one didn't (see haos-ovos-addons/
+ovos-skills/DOCS.md). When it exists, only the confirmed 'checkbox' field
+type gets a real form control; everything else, and skills with no
+settingsmeta at all, fall back to a single raw-JSON text field — scoped
+down deliberately rather than guessing at unconfirmed field types like
+'select'.
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import requests
@@ -84,6 +94,138 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
             resp = requests.post(
                 f"{api_url}/skills/install",
                 json={"url": source_url},
+                timeout=REQUEST_TIMEOUT,
+            )
+            return resp.status_code == 200
+        except requests.RequestException:
+            return False
+
+    # --- reconfigure: edit an existing skill's settings.json ---
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        subentry = self._get_reconfigure_subentry()
+        api_url = await self.hass.async_add_executor_job(_get_skills_api_url)
+        if not api_url:
+            return self.async_abort(reason="no_api_url")
+
+        skill_id = subentry.data["skill_id"]
+        package_name = subentry.data.get("package_name", "")
+        meta = await self.hass.async_add_executor_job(
+            self._fetch_settingsmeta, api_url, skill_id, package_name
+        )
+        current = await self.hass.async_add_executor_job(
+            self._fetch_current_settings, api_url, skill_id
+        )
+
+        if meta and meta.get("has_settingsmeta") and all(
+            f.get("type") == "checkbox" for f in meta["fields"]
+        ) and meta["fields"]:
+            # Every field is a confirmed, mappable type — real form.
+            return await self.async_step_reconfigure_fields(
+                user_input, api_url=api_url, skill_id=skill_id,
+                fields=meta["fields"], current=current,
+            )
+
+        # No settingsmeta, or it has field types we haven't confirmed how
+        # to map yet (e.g. 'select') — raw JSON, same pattern used
+        # elsewhere in this project for exactly this kind of gap.
+        return await self.async_step_reconfigure_json(
+            user_input, api_url=api_url, skill_id=skill_id, current=current,
+        )
+
+    async def async_step_reconfigure_fields(
+        self,
+        user_input: dict[str, Any] | None,
+        *,
+        api_url: str,
+        skill_id: str,
+        fields: list[dict],
+        current: dict,
+    ) -> SubentryFlowResult:
+        if user_input is not None:
+            ok = await self.hass.async_add_executor_job(
+                self._write_settings, api_url, skill_id, user_input
+            )
+            if not ok:
+                return self.async_abort(reason="settings_write_failed")
+            return self.async_update_and_abort(self._get_entry(), self._get_reconfigure_subentry())
+
+        schema_dict = {}
+        for field in fields:
+            name = field["name"]
+            existing = current.get(name, field.get("value"))
+            # settingsmeta's own "value" is a string ("false"/"true"),
+            # confirmed for real — normalize either that or a properly
+            # typed value already in settings.json to an actual bool.
+            default = str(existing).strip().lower() == "true"
+            schema_dict[vol.Optional(name, default=default)] = bool
+
+        return self.async_show_form(
+            step_id="reconfigure_fields", data_schema=vol.Schema(schema_dict)
+        )
+
+    async def async_step_reconfigure_json(
+        self,
+        user_input: dict[str, Any] | None,
+        *,
+        api_url: str,
+        skill_id: str,
+        current: dict,
+    ) -> SubentryFlowResult:
+        if user_input is not None:
+            try:
+                parsed = json.loads(user_input["raw_json"])
+            except json.JSONDecodeError:
+                return self.async_show_form(
+                    step_id="reconfigure_json",
+                    data_schema=vol.Schema(
+                        {vol.Required("raw_json", default=user_input["raw_json"]): str}
+                    ),
+                    errors={"raw_json": "invalid_json"},
+                )
+            ok = await self.hass.async_add_executor_job(
+                self._write_settings, api_url, skill_id, parsed
+            )
+            if not ok:
+                return self.async_abort(reason="settings_write_failed")
+            return self.async_update_and_abort(self._get_entry(), self._get_reconfigure_subentry())
+
+        schema = vol.Schema(
+            {vol.Required("raw_json", default=json.dumps(current, indent=2)): str}
+        )
+        return self.async_show_form(step_id="reconfigure_json", data_schema=schema)
+
+    @staticmethod
+    def _fetch_settingsmeta(api_url: str, skill_id: str, package_name: str) -> dict | None:
+        try:
+            resp = requests.get(
+                f"{api_url}/skills/{skill_id}/settingsmeta",
+                params={"package_name": package_name},
+                timeout=REQUEST_TIMEOUT,
+            )
+            if resp.status_code != 200:
+                return None
+            return resp.json()
+        except requests.RequestException:
+            return None
+
+    @staticmethod
+    def _fetch_current_settings(api_url: str, skill_id: str) -> dict:
+        try:
+            resp = requests.get(f"{api_url}/skills/{skill_id}/settings", timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.RequestException:
+            return {}
+
+    @staticmethod
+    def _write_settings(api_url: str, skill_id: str, settings: dict) -> bool:
+        try:
+            resp = requests.put(
+                f"{api_url}/skills/{skill_id}/settings",
+                json=settings,
                 timeout=REQUEST_TIMEOUT,
             )
             return resp.status_code == 200

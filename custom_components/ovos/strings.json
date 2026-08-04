@@ -30,13 +30,28 @@
           "data": {
             "skill_id": "Skill"
           }
+        },
+        "reconfigure_fields": {
+          "title": "Skill settings",
+          "description": "This skill's settingsmeta.json only uses field types we've confirmed how to map to a real form (checkboxes). If it ever gains other field types, this form will fall back to raw JSON instead."
+        },
+        "reconfigure_json": {
+          "title": "Skill settings (raw JSON)",
+          "description": "This skill either has no settingsmeta.json, or uses a field type not yet mapped to a real form \u2014 edit its settings.json directly as JSON.",
+          "data": {
+            "raw_json": "Settings (JSON)"
+          }
         }
       },
       "abort": {
         "no_api_url": "Set the \"Skills API URL\" text field (under the OpenVoiceOS integration's own entities) to your ovos-skills add-on's address first, e.g. http://<hostname>:8500.",
         "catalog_unreachable": "Could not reach the skill catalog via the configured Skills API URL.",
         "unknown_skill": "That skill could not be found in the catalog.",
-        "install_request_failed": "Could not start the install \u2014 check that the ovos-skills add-on is running and the Skills API URL is correct."
+        "install_request_failed": "Could not start the install \u2014 check that the ovos-skills add-on is running and the Skills API URL is correct.",
+        "settings_write_failed": "Could not save settings \u2014 check that the ovos-skills add-on is running and the Skills API URL is correct."
+      },
+      "error": {
+        "invalid_json": "That's not valid JSON."
       }
     }
   }
