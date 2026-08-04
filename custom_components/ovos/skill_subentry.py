@@ -4,19 +4,22 @@ Add flow: dropdown of the official catalog (36 skills, confirmed small
 enough — see haos-ovos-addons/ovos-skills/DOCS.md), picking one calls that
 add-on's /skills/install (fire-and-poll, matching its own async design —
 see that repo's DEVELOPER.md for why a blocking call would be wrong here).
+Dropdown labels fold in a short description — HA's select selector has no
+secondary/subtitle line (confirmed against the selector docs), so a
+one-line "Name — description" is the only way to show more than the bare
+name without a custom frontend card, out of scope here.
 
-Reconfigure flow: edits a skill's settings.json. Not every skill ships a
-settingsmeta.json describing its fields — confirmed for real by installing
-two different skills, one had it, one didn't (see haos-ovos-addons/
-ovos-skills/DOCS.md). When it exists, only the confirmed 'checkbox' field
-type gets a real form control; everything else, and skills with no
-settingsmeta at all, fall back to a single raw-JSON text field — scoped
-down deliberately rather than guessing at unconfirmed field types like
-'select'.
+Reconfigure flow: edits a skill's settings.json, but ONLY when there's a
+settingsmeta.json with exclusively confirmed-mappable fields (currently
+just 'checkbox') to build a real form from — not every skill ships one
+(confirmed for real: date-time has it, fallback-chatgpt doesn't). Rather
+than fall back to a raw-JSON box for everything else, reconfigure simply
+isn't offered for those skills: a clean "no settings" boundary, matching
+what a skill without settingsmeta actually is — not configurable through
+this UI, not a lesser version of one that is.
 """
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import requests
@@ -30,9 +33,20 @@ REQUEST_TIMEOUT = 10  # catalog fetch / kicking off install — not waiting
                        # for pip itself, which the add-on's own API already
                        # doesn't block on (see its /skills/install design)
 
+MAX_DESCRIPTION_LEN = 60
+
 
 def _get_skills_api_url() -> str | None:
     return read_shared_config().get(CONF_SKILLS_API_URL) or None
+
+
+def _dropdown_label(item: dict) -> str:
+    desc = (item.get("description") or "").strip().split("\n")[0]
+    if not desc:
+        return item["name"]
+    if len(desc) > MAX_DESCRIPTION_LEN:
+        desc = desc[:MAX_DESCRIPTION_LEN].rstrip() + "…"
+    return f"{item['name']} — {desc}"
 
 
 class SkillSubentryFlowHandler(ConfigSubentryFlow):
@@ -74,7 +88,7 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
 
         schema = vol.Schema(
             {vol.Required("skill_id"): vol.In(
-                {sid: item["name"] for sid, item in skills_by_id.items()}
+                {sid: _dropdown_label(item) for sid, item in skills_by_id.items()}
             )}
         )
         return self.async_show_form(step_id="user", data_schema=schema)
@@ -115,24 +129,24 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
         meta = await self.hass.async_add_executor_job(
             self._fetch_settingsmeta, api_url, skill_id, package_name
         )
+
+        mappable = bool(
+            meta and meta.get("has_settingsmeta") and meta["fields"]
+            and all(f.get("type") == "checkbox" for f in meta["fields"])
+        )
+        if not mappable:
+            # No settingsmeta at all, or one with field types we haven't
+            # confirmed how to render (e.g. 'select') — a clean "not
+            # configurable through this UI" boundary rather than a raw
+            # JSON box standing in for "we're not sure what this is".
+            return self.async_abort(reason="no_settings_available")
+
         current = await self.hass.async_add_executor_job(
             self._fetch_current_settings, api_url, skill_id
         )
-
-        if meta and meta.get("has_settingsmeta") and all(
-            f.get("type") == "checkbox" for f in meta["fields"]
-        ) and meta["fields"]:
-            # Every field is a confirmed, mappable type — real form.
-            return await self.async_step_reconfigure_fields(
-                user_input, api_url=api_url, skill_id=skill_id,
-                fields=meta["fields"], current=current,
-            )
-
-        # No settingsmeta, or it has field types we haven't confirmed how
-        # to map yet (e.g. 'select') — raw JSON, same pattern used
-        # elsewhere in this project for exactly this kind of gap.
-        return await self.async_step_reconfigure_json(
-            user_input, api_url=api_url, skill_id=skill_id, current=current,
+        return await self.async_step_reconfigure_fields(
+            user_input, api_url=api_url, skill_id=skill_id,
+            fields=meta["fields"], current=current,
         )
 
     async def async_step_reconfigure_fields(
@@ -165,37 +179,6 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
         return self.async_show_form(
             step_id="reconfigure_fields", data_schema=vol.Schema(schema_dict)
         )
-
-    async def async_step_reconfigure_json(
-        self,
-        user_input: dict[str, Any] | None,
-        *,
-        api_url: str,
-        skill_id: str,
-        current: dict,
-    ) -> SubentryFlowResult:
-        if user_input is not None:
-            try:
-                parsed = json.loads(user_input["raw_json"])
-            except json.JSONDecodeError:
-                return self.async_show_form(
-                    step_id="reconfigure_json",
-                    data_schema=vol.Schema(
-                        {vol.Required("raw_json", default=user_input["raw_json"]): str}
-                    ),
-                    errors={"raw_json": "invalid_json"},
-                )
-            ok = await self.hass.async_add_executor_job(
-                self._write_settings, api_url, skill_id, parsed
-            )
-            if not ok:
-                return self.async_abort(reason="settings_write_failed")
-            return self.async_update_and_abort(self._get_entry(), self._get_reconfigure_subentry())
-
-        schema = vol.Schema(
-            {vol.Required("raw_json", default=json.dumps(current, indent=2)): str}
-        )
-        return self.async_show_form(step_id="reconfigure_json", data_schema=schema)
 
     @staticmethod
     def _fetch_settingsmeta(api_url: str, skill_id: str, package_name: str) -> dict | None:
