@@ -87,6 +87,43 @@ environment (not an isolated venv) causes any dependency conflicts with HA Core'
 packages. Worth checking directly once there's a HACS-installable custom_component skeleton
 to test against, rather than guessing further in isolation.
 
+## v1 confirmed working end-to-end on real hardware
+
+As of v0.0.3, tested against a real HA Core install (not just syntax-checked):
+- Config flow pre-fill and submission works.
+- Initial write to the shared file works.
+- A restart-persistence bug was found and fixed (see git history on
+  `custom_components/ovos/text.py`/`number.py`/`select.py` — entities were reading
+  `entry.data`, the original config-flow submission, instead of the current shared file, so
+  a restart would silently revert any later edit).
+- Rebuilt on a `DataUpdateCoordinator` (30s poll interval) after that fix, so entities also
+  pick up external edits (a person editing the file directly, or another add-on writing its
+  own section) without needing a restart or manual integration reload.
+
+### Why polling, not file watching
+
+Genuinely considered both. File watching (e.g. via `watchdog`) is more "correct" in the
+abstract — instant reaction to the actual write event — but was rejected for three concrete
+reasons specific to this data and this environment:
+
+1. **New dependency + thread-safety risk.** `watchdog`'s file-system events fire from an
+   OS-level thread outside HA's asyncio event loop; bridging that back in correctly (no
+   blocking calls, no dropped events) is a real source of subtle bugs, not just extra code.
+2. **The write pattern complicates it further.** Every add-on writes via
+   `jq > file.tmp && mv file.tmp file` (atomic rename — correct practice) — a watcher has to
+   specifically catch the *rename*, not the more obvious "modified" event on the `.tmp` file.
+3. **The data doesn't need instant reactivity.** Language/location/unit settings change a
+   handful of times a year, changed by a person or an add-on's startup — not live sensor
+   data. The entire value proposition of watching over polling is latency, and here that
+   latency genuinely doesn't matter.
+
+**Entity count doesn't favor either approach** — this was floated as a reason to prefer
+watching ("more entities are coming, e.g. skill settings") but doesn't hold up: the
+`DataUpdateCoordinator` pattern means exactly one file read per interval serves every entity
+regardless of count, present or future. Watching would scale the same way. Neither approach's
+cost scales with entity count; what matters is how the file is written and how often it
+actually changes, and neither of those changes as more entities get added.
+
 ## Relationship to the other repos
 
 - [haos-ovos-addons](https://github.com/andlo/haos-ovos-addons) — the Supervisor add-ons this
