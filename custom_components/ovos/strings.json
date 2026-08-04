@@ -69,8 +69,8 @@
         "no_core_api_url": "Set the \"Core API URL\" text field (under the OpenVoiceOS integration's own entities) to your ovos-core add-on's address first, e.g. http://<hostname>:8500.",
         "core_unreachable": "Couldn't reach the ovos-core add-on at the configured Core API URL. This feature needs ovos-core installed and running.",
         "autoconfigure_failed": "Something went wrong picking a text-to-speech/speech-to-text engine. Check that the ovos-core add-on is running and the Core API URL is correct.",
-        "autoconfigure_nothing_found": "No text-to-speech/speech-to-text option was found for {lang} with that combination. Try a different voice mode or gender, or leave voice gender unset.",
-        "autoconfigure_success": "Done for {lang}. Text-to-speech will use \"{tts_module}\"; speech-to-text will use \"{stt_module}\". Restart the TTS/STT add-ons to pick this up. If either one doesn't start afterwards, add its name under that add-on's own \"Extra pip packages\" setting."
+        "autoconfigure_nothing_found": "No text-to-speech/speech-to-text option was found for **{lang}** with that combination.\n\nTry a different voice mode or gender, or leave voice gender unset.",
+        "autoconfigure_success": "Set up for **{lang}**.\n\n- Text-to-speech: `{tts_module}`\n- Speech-to-text: `{stt_module}`\n\nRestart the TTS/STT add-ons to use these. If either one doesn't start afterwards, add its name under that add-on's own \"Extra pip packages\" setting."
       }
     }
   }
