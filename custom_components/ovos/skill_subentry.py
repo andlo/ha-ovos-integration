@@ -8,14 +8,52 @@ compact, name-only dropdown; step two shows the selected skill's full
 description as plain text before kicking off the install. Keeps the list
 scannable without losing the description entirely.
 
-Reconfigure flow: edits a skill's settings.json, but ONLY when there's a
-settingsmeta.json with exclusively confirmed-mappable fields (currently
-just 'checkbox') to build a real form from — not every skill ships one
-(confirmed for real: date-time has it, fallback-chatgpt doesn't). Rather
-than fall back to a raw-JSON box for everything else, reconfigure simply
-isn't offered for those skills: a clean "no settings" boundary, matching
-what a skill without settingsmeta actually is — not configurable through
-this UI, not a lesser version of one that is.
+Reconfigure flow: edits a skill's settings.json, using two layers:
+
+1. settingsmeta.json, when present and exclusively 'checkbox' fields —
+   the only field type confirmed how to map safely so far. Not every
+   skill ships one (confirmed for real: date-time has it, many others
+   don't).
+
+2. Falling back to settings.json's OWN shape when there's no usable
+   settingsmeta. Confirmed by reading Mycroft's own skill-settings
+   documentation: settingsmeta.json was built specifically to upload a
+   skill's settings schema to the old home.mycroft.ai backend, so a
+   web account page could render a form for it — a backend OVOS
+   explicitly doesn't require (see haos-ovos-addons' DEVELOPER.md).
+   settings.json itself, in contrast, is created automatically the
+   moment a skill loads at all, with or without any settingsmeta.
+   That means settings.json's own values — a bool, a number, a string
+   — already tell us the shape of a real form (checkbox / number /
+   text), no metadata file needed. This is more aligned with a
+   backend-less setup than leaning on settingsmeta ever was, not a
+   workaround for its absence. Nested dicts/lists and internal keys
+   (leading "__", e.g. "__mycroft_skill_firstrun") are skipped —
+   editing those safely isn't confirmed, so they're left untouched
+   rather than guessed at.
+
+   For this to have anything to read, the skill needs to have loaded at
+   least once — ovos-skills' own /skills/install now hot-launches every
+   newly-installed skill regardless of the install job's own (unreliable
+   — see its api.py) reported status, specifically so a freshly-installed
+   skill gets a chance to write its own settings.json before someone
+   opens this form.
+
+   Field-name heuristic: a name containing "key", "token", "secret", or
+   "password" renders as a masked password input (HA's own TextSelector
+   password mode) rather than plain text — cheap, imperfect, but a
+   sensible default for the exact kind of value (API keys) this layer
+   exists for.
+
+Writing back: always merges into the skill's FULL current settings.json
+(fetched fresh, not just what's on the form) rather than replacing it
+outright — skipped/internal keys survive a save instead of being
+silently dropped.
+
+If neither layer has anything usable, reconfigure isn't offered at all:
+a clean "no settings available" boundary, matching what a skill without
+either really is — not configurable through this UI, not a lesser
+version of one that is.
 """
 from __future__ import annotations
 
@@ -24,6 +62,7 @@ from typing import Any
 import requests
 import voluptuous as vol
 from homeassistant.config_entries import ConfigSubentryFlow, SubentryFlowResult
+from homeassistant.helpers import selector
 
 from .const import DOMAIN, CONF_SKILLS_API_URL
 from .shared_config import read_shared_config
@@ -32,9 +71,35 @@ REQUEST_TIMEOUT = 10  # catalog fetch / kicking off install — not waiting
                        # for pip itself, which the add-on's own API already
                        # doesn't block on (see its /skills/install design)
 
+SENSITIVE_NAME_HINTS = ("key", "token", "secret", "password")
+
 
 def _get_skills_api_url() -> str | None:
     return read_shared_config().get(CONF_SKILLS_API_URL) or None
+
+
+def _infer_fields_from_settings(current: dict) -> list[dict]:
+    """Build a settingsmeta-shaped field list directly from settings.json's
+    own values, for skills that have no usable settingsmeta.json (see
+    module docstring). Only top-level primitives are considered safely
+    inferable; nested dicts/lists are skipped rather than guessed at,
+    and "__"-prefixed keys are OVOS's own internal bookkeeping (e.g.
+    "__mycroft_skill_firstrun"), not something a person should edit.
+    """
+    fields = []
+    for name, value in current.items():
+        if name.startswith("__") or isinstance(value, (dict, list)):
+            continue
+        if isinstance(value, bool):
+            ftype = "checkbox"
+        elif isinstance(value, (int, float)):
+            ftype = "number"
+        elif any(hint in name.lower() for hint in SENSITIVE_NAME_HINTS):
+            ftype = "password"
+        else:
+            ftype = "text"
+        fields.append({"name": name, "type": ftype, "value": value})
+    return fields
 
 
 class SkillSubentryFlowHandler(ConfigSubentryFlow):
@@ -146,19 +211,26 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
             meta and meta.get("has_settingsmeta") and meta["fields"]
             and all(f.get("type") == "checkbox" for f in meta["fields"])
         )
-        if not mappable:
-            # No settingsmeta at all, or one with field types we haven't
-            # confirmed how to render (e.g. 'select') — a clean "not
-            # configurable through this UI" boundary rather than a raw
-            # JSON box standing in for "we're not sure what this is".
-            return self.async_abort(reason="no_settings_available")
 
         current = await self.hass.async_add_executor_job(
             self._fetch_current_settings, api_url, skill_id
         )
+
+        if mappable:
+            fields = meta["fields"]
+        else:
+            # No settingsmeta, or one with field types not yet confirmed
+            # mappable — fall back to settings.json's own shape (see
+            # module docstring). If the skill has never loaded, this is
+            # legitimately empty; nothing to build a form from either way.
+            fields = _infer_fields_from_settings(current)
+
+        if not fields:
+            return self.async_abort(reason="no_settings_available")
+
         return await self.async_step_reconfigure_fields(
             user_input, api_url=api_url, skill_id=skill_id,
-            fields=meta["fields"], current=current,
+            fields=fields, current=current,
         )
 
     async def async_step_reconfigure_fields(
@@ -171,8 +243,13 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
         current: dict,
     ) -> SubentryFlowResult:
         if user_input is not None:
+            # Merge into the FULL current settings, not just what's on
+            # this form — skipped/internal keys (nested values, "__"
+            # bookkeeping) survive a save instead of being silently
+            # dropped by a naive overwrite.
+            merged = {**current, **user_input}
             ok = await self.hass.async_add_executor_job(
-                self._write_settings, api_url, skill_id, user_input
+                self._write_settings, api_url, skill_id, merged
             )
             if not ok:
                 return self.async_abort(reason="settings_write_failed")
@@ -181,12 +258,29 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
         schema_dict = {}
         for field in fields:
             name = field["name"]
+            ftype = field.get("type", "checkbox")
             existing = current.get(name, field.get("value"))
-            # settingsmeta's own "value" is a string ("false"/"true"),
-            # confirmed for real — normalize either that or a properly
-            # typed value already in settings.json to an actual bool.
-            default = str(existing).strip().lower() == "true"
-            schema_dict[vol.Optional(name, default=default)] = bool
+
+            if ftype == "checkbox":
+                # settingsmeta's own "value" is a string ("false"/"true")
+                # when it's the source; settings.json's own bool needs no
+                # such normalization — str() first handles both uniformly.
+                default = str(existing).strip().lower() == "true"
+                schema_dict[vol.Optional(name, default=default)] = bool
+            elif ftype == "number":
+                try:
+                    default = float(existing) if existing not in (None, "") else 0
+                except (TypeError, ValueError):
+                    default = 0
+                schema_dict[vol.Optional(name, default=default)] = vol.Coerce(float)
+            elif ftype == "password":
+                schema_dict[vol.Optional(name, default=str(existing or ""))] = (
+                    selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                    )
+                )
+            else:  # text
+                schema_dict[vol.Optional(name, default=str(existing or ""))] = str
 
         return self.async_show_form(
             step_id="reconfigure_fields", data_schema=vol.Schema(schema_dict)
