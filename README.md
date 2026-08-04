@@ -1,15 +1,16 @@
 # ha-ovos-integration
 
 ![status](https://img.shields.io/badge/status-work%20in%20progress-orange)
-![status](https://img.shields.io/badge/status-untested-lightgrey)
+![status](https://img.shields.io/badge/status-verified%20on%20real%20hardware-brightgreen)
 
 <img src="logo.png" width="96" height="96" alt="OpenVoiceOS logo">
 
-> 🚧 **Work in progress — v0.0.2, first real install confirmed working, with one bug already
-> caught and fixed.** Config flow pre-fill, initial writes, and all three entity platforms
-> verified end-to-end on real Home Assistant Core. v0.0.1 had a restart-persistence bug
-> (entities re-initialized from the original config-flow submission instead of the current
-> shared file) — fixed in v0.0.2, not yet re-verified across an actual restart.
+> 🚧 **Work in progress — v0.0.4, confirmed working end-to-end including two-way sync.**
+> Config flow pre-fill, writes from HA, and picking up edits made completely outside HA (a
+> direct file edit surfaced within the 30s poll interval, no restart needed) all verified on
+> real hardware. Integration display name is **"OpenVoiceOS"** in Add Integration — not
+> "OpenVoiceOS shared config" as earlier versions showed, since the same domain will also
+> host per-skill settings entities later and the name shouldn't be tied to v1's scope.
 
 A Home Assistant **integration** (HACS-distributed `custom_component`, not a Supervisor
 add-on) for configuring OVOS the way HAOS users already configure everything else: as
