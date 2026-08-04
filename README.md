@@ -23,7 +23,7 @@ Two things it aims to do:
    see `DEVELOPER.md`), pre-filled from `hass.config` where possible, exposed as `text`/
    `number`/`select` entities on a 30s-polling `DataUpdateCoordinator`.
 2. **Per-skill management via config subentries** — not started. One subentry per installed
-   skill, calling a small API in [haos-ovos-skills](https://github.com/andlo/haos-ovos-skills)
+   skill, calling a small API in [haos-ovos-addons/ovos-skills](https://github.com/andlo/haos-ovos-addons/tree/master/ovos-skills)
    to install/remove and generate settings from each skill's `settingsmeta.json`. Replaces
    the earlier standalone-webapp plan (`ovos-skill-browser`, now archived).
 
@@ -34,9 +34,8 @@ to the other HA-OVOS repos.
 
 Part of the **HA-OVOS** project: making it easy for a Home Assistant OS user to discover and
 use OpenVoiceOS, through interfaces that feel native to HAOS. See
-[haos-ovos-addons](https://github.com/andlo/haos-ovos-addons) for the Supervisor add-ons and
-[haos-ovos-skills](https://github.com/andlo/haos-ovos-skills) for the skill-management API
-this integration's config subentries call.
+[haos-ovos-addons](https://github.com/andlo/haos-ovos-addons) for the Supervisor add-ons —
+including `ovos-skills`, the skill-management API this integration's config subentries call.
 
 ## License
 

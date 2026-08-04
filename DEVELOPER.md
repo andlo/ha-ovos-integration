@@ -57,8 +57,8 @@ Install actually reach a live instance?") by construction — the integration ca
 itself, no ambiguity.
 
 **Add flow**: dropdown of the official OVOS skill catalog (36 skills — confirmed via the
-GitHub API, genuinely small enough for a dropdown; see `haos-ovos-skills`'s `DEVELOPER.md`
-for the count and how it was checked). Picking one calls `haos-ovos-skills`'s install API.
+GitHub API, genuinely small enough for a dropdown; see `haos-ovos-addons`'s `ovos-skills/DOCS.md`
+for the count and how it was checked). Picking one calls `ovos-skills`'s install API.
 
 **Per-subentry config**: generated from that skill's `settingsmeta.json` — the same
 number/select/text/switch entity types this integration already uses for shared config,
@@ -68,7 +68,7 @@ just scoped to one skill's settings instead of the shared file.
 
 **What this explicitly does NOT do**: make the skill respond to voice queries. Installing and
 configuring a skill here doesn't wire it into Assist — that needs OVOS's messagebus/HiveMind,
-which has no bridge into HA yet. See `haos-ovos-skills`'s README for the full reasoning on
+which has no bridge into HA yet. See `ovos-skills`'s DOCS.md in haos-ovos-addons for the full reasoning on
 why that's an accepted, separate gap rather than a blocker.
 
 ## Open questions — status as of tonight's spike
@@ -145,5 +145,5 @@ actually changes, and neither of those changes as more entities get added.
 
 - [haos-ovos-addons](https://github.com/andlo/haos-ovos-addons) — the Supervisor add-ons this
   integration reads shared config from and complements.
-- [haos-ovos-skills](https://github.com/andlo/haos-ovos-skills) — the API this integration's
+- [haos-ovos-addons/ovos-skills](https://github.com/andlo/haos-ovos-addons/tree/master/ovos-skills) — the API this integration's
   config subentries call to install/list/remove skills and read/write their settings.
