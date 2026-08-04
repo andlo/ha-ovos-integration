@@ -5,12 +5,12 @@
 
 <img src="logo.png" width="96" height="96" alt="OpenVoiceOS logo">
 
-> 🚧 **Work in progress — v0.0.4, confirmed working end-to-end including two-way sync.**
-> Config flow pre-fill, writes from HA, and picking up edits made completely outside HA (a
-> direct file edit surfaced within the 30s poll interval, no restart needed) all verified on
-> real hardware. Integration display name is **"OpenVoiceOS"** in Add Integration — not
-> "OpenVoiceOS shared config" as earlier versions showed, since the same domain will also
-> host per-skill settings entities later and the name shouldn't be tied to v1's scope.
+> 🚧 **Work in progress — v0.0.5, both halves confirmed working end-to-end on real hardware.**
+> Shared config: two-way sync verified (a direct file edit surfaced via polling with no
+> restart needed). Skill management: the full loop verified for real — picked a skill from
+> the catalog dropdown in a config subentry, it genuinely installed via `ovos-skills`'
+> `SkillsStore` bridge, confirmed present on both the HA subentry side and the add-on's own
+> `/skills` list. Integration display name is **"OpenVoiceOS"** in Add Integration.
 
 A Home Assistant **integration** (HACS-distributed `custom_component`, not a Supervisor
 add-on) for configuring OVOS the way HAOS users already configure everything else: as
@@ -22,10 +22,12 @@ Two things it aims to do:
    reads/writes `/share/mycroft/mycroft.conf` directly (plain JSON, not `ovos-config` yet —
    see `DEVELOPER.md`), pre-filled from `hass.config` where possible, exposed as `text`/
    `number`/`select` entities on a 30s-polling `DataUpdateCoordinator`.
-2. **Per-skill management via config subentries** — not started. One subentry per installed
-   skill, calling a small API in [haos-ovos-addons/ovos-skills](https://github.com/andlo/haos-ovos-addons/tree/master/ovos-skills)
-   to install/remove and generate settings from each skill's `settingsmeta.json`. Replaces
-   the earlier standalone-webapp plan (`ovos-skill-browser`, now archived).
+2. **Per-skill management via config subentries** — implemented and verified: one subentry
+   per installed skill, add flow pulls a dropdown from the real 36-skill catalog, picking one
+   calls [haos-ovos-addons/ovos-skills](https://github.com/andlo/haos-ovos-addons/tree/master/ovos-skills)'
+   install API. Confirmed on real hardware — the skill genuinely installs, not just the
+   subentry getting created. Per-skill settings from `settingsmeta.json` not started yet.
+   Replaces the earlier standalone-webapp plan (`ovos-skill-browser`, now archived).
 
 See [DEVELOPER.md](DEVELOPER.md) for the architecture, open questions, and how this relates
 to the other HA-OVOS repos.
