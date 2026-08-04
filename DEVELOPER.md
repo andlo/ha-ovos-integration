@@ -24,6 +24,29 @@ Language, location, units, and other `mycroft.conf` fields, read/written via `ov
 and exposed as HA entities (select/text/number), so setting language once applies everywhere
 instead of every add-on holding its own disconnected copy.
 
+**Pre-fill the config flow from HA Core's own settings** — confirmed available directly on
+`hass.config` (checked against real system data, not assumed):
+
+| HA Core field | Example value seen | Maps to `mycroft.conf` | Notes |
+|---|---|---|---|
+| `language` | `"en"` | `lang` | Needs a region suffix OVOS expects (e.g. `en-us`). HA only gives the bare language code — combine with `country` as a *suggested default*, not a hardcoded truth, and let the user confirm/edit. |
+| `country` | `"DK"` | (used to build `lang`) | See above — `f"{language}-{country}".lower()` is a reasonable guess, not guaranteed correct (e.g. `en-dk` isn't a real OVOS locale, just the best guess from what HA exposes). |
+| `time_zone` | `"Europe/Copenhagen"` | `location.timezone.code` | Direct IANA tz name match, no translation needed. |
+| `latitude` / `longitude` | `55.986...` / `12.497...` | `location.coordinate.latitude/longitude` | Direct copy. |
+| `unit_system.length` | `"km"` vs `"mi"` | `system_unit` (`metric`/`imperial`) | Check this one field: `"km"` → `metric`, `"mi"` → `imperial`. HA doesn't expose the whole unit system as a single flat label in the data we could inspect, this field is the reliable proxy. |
+
+**Not available from HA Core**: city/state name breakdown (`location.city.*` in
+`mycroft.conf`'s schema). HA only has a user-given `location_name` (e.g. "Hjem" —
+Danish for "Home", not a real place name) and raw coordinates, no structured city/country
+lookup. Leave that section of the config flow optional/blank rather than guessing from a
+freeform name, or reverse-geocode from lat/long if this ever feels worth the added
+dependency.
+
+**Design principle**: pre-fill, don't lock. These are suggested defaults in the config flow
+form, editable before submit — HA's own settings are a good starting guess, not a source of
+truth OVOS must match exactly (a household using OVOS in a different working language than
+their HA install's UI language is a real, plausible case).
+
 ### 2. Per-skill settings from `settingsmeta.json`
 
 For each installed skill, read its `settingsmeta.json` and generate matching HA entities
