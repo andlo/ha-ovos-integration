@@ -31,35 +31,38 @@ For each installed skill, read its `settingsmeta.json` and generate matching HA 
 in this format for OVOS's own UI layers — this integration would just be another consumer of
 that same convention, kept in sync with whatever skills are actually installed.
 
-## Open questions (resolve before writing code)
+## Open questions — status as of tonight's spike
 
-### Filesystem access across HA Core and add-ons
+### ✅ Filesystem access across HA Core and add-ons — resolved and implemented
 
-An HA integration runs inside HA Core's own container, not inside a Supervisor add-on's — it
-cannot read an add-on's private filesystem directly. `/share` is mounted into Core, Supervisor,
-and add-ons alike in HAOS specifically for this kind of cross-component data, so this is
-solvable, but it means:
+`/share/mycroft/mycroft.conf` is now the shared config path, and `haos-ovos-addons`'s four
+add-ons already write there (as of `haos-ovos-addons` commit extending the `/share`
+convention to stt/wakeword/persona). Confirmed on real hardware: all four add-ons build,
+start cleanly, and merge into the same file without clobbering each other's sections (each
+add-on does a read-merge-write of only its own top-level key, e.g. `tts`, `stt`, `hotwords`).
 
-- Every relevant add-on (including a future skills add-on) needs to deliberately store its
-  config/settings under a shared path like `/share/ovos/...` for the integration to reach it.
-- This is a design decision to lock in **now**, across `haos-ovos-addons` too, not something
-  that falls out for free — the existing add-ons currently write `mycroft.conf` inside their
-  own container's `~/.config/mycroft/`, not `/share`.
+This integration can now assume that path exists and is kept in sync by the add-ons — no
+further coordination needed on that side before starting on the integration itself.
 
-### Does `ovos-config` work standalone?
+### ✅ Does `ovos-config` work standalone? — resolved, yes
 
-`ovos-config`'s `Configuration()` class does layered config merging (user + system + default),
-which is exactly the merge behavior we want reused rather than reimplemented. Not yet
-confirmed:
+Confirmed via spike:
+- `Configuration()` loads in ~0.15s with **no messagebus connection** required.
+- Dependencies are lightweight and pure-Python (`combo-lock`, `ovos-utils`,
+  `python-dateutil`, `PyYAML`, `rich-click`; `ovos-utils` itself adds `json_database`,
+  `kthread`, `pexpect`, `pyee`, `requests`, `rich`, `watchdog`) — nothing that looks likely to
+  conflict badly with HA Core's own dependency set, though not yet tested installed
+  *alongside* HA Core specifically.
+- **It already respects `XDG_CONFIG_HOME`**, confirmed by setting it to a custom path and
+  seeing `Configuration()` resolve to `<path>/mycroft/mycroft.conf` accordingly. This is what
+  makes the shared `/share/mycroft/mycroft.conf` convention above work with zero custom code
+  on either side — both the add-ons and this integration just need `XDG_CONFIG_HOME=/share`
+  set in their respective environments, and `ovos-config`'s own logic does the rest.
 
-- Whether it works standalone without a live OVOS messagebus connection (an integration
-  running in HA Core has no OVOS bus to connect to).
-- Whether HA Core's Python environment can host it cleanly alongside HA's own dependencies
-  (version conflicts, unwanted transitive deps — the kind of thing that bit
-  `haos-ovos-addons` repeatedly).
-
-Worth a quick spike — install `ovos-config` in isolation and see what it actually needs — before
-designing entities around it.
+**Remaining unknown**: only whether installing `ovos-config` inside HA Core's actual Python
+environment (not an isolated venv) causes any dependency conflicts with HA Core's own
+packages. Worth checking directly once there's a HACS-installable custom_component skeleton
+to test against, rather than guessing further in isolation.
 
 ## Relationship to the other repos
 
