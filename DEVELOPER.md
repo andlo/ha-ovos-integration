@@ -47,12 +47,29 @@ form, editable before submit — HA's own settings are a good starting guess, no
 truth OVOS must match exactly (a household using OVOS in a different working language than
 their HA install's UI language is a real, plausible case).
 
-### 2. Per-skill settings from `settingsmeta.json`
+### 2. Per-skill management via config subentries
 
-For each installed skill, read its `settingsmeta.json` and generate matching HA entities
-(number/select/text/switch per setting) automatically. Skills already declare their settings
-in this format for OVOS's own UI layers — this integration would just be another consumer of
-that same convention, kept in sync with whatever skills are actually installed.
+Skills are managed as **HA config subentries** — one per installed skill, living under this
+integration's main entry (Settings → Devices & services → OpenVoiceOS → Add sub-entry).
+Replaces the earlier plan of a standalone web app (`ovos-skill-browser`, now archived): same
+place as everything else in HA, and it directly answers that repo's one open question ("does
+Install actually reach a live instance?") by construction — the integration calls the API
+itself, no ambiguity.
+
+**Add flow**: dropdown of the official OVOS skill catalog (36 skills — confirmed via the
+GitHub API, genuinely small enough for a dropdown; see `haos-ovos-skills`'s `DEVELOPER.md`
+for the count and how it was checked). Picking one calls `haos-ovos-skills`'s install API.
+
+**Per-subentry config**: generated from that skill's `settingsmeta.json` — the same
+number/select/text/switch entity types this integration already uses for shared config,
+just scoped to one skill's settings instead of the shared file.
+
+**Remove flow**: deleting the subentry calls the same add-on's uninstall API.
+
+**What this explicitly does NOT do**: make the skill respond to voice queries. Installing and
+configuring a skill here doesn't wire it into Assist — that needs OVOS's messagebus/HiveMind,
+which has no bridge into HA yet. See `haos-ovos-skills`'s README for the full reasoning on
+why that's an accepted, separate gap rather than a blocker.
 
 ## Open questions — status as of tonight's spike
 
@@ -127,8 +144,6 @@ actually changes, and neither of those changes as more entities get added.
 ## Relationship to the other repos
 
 - [haos-ovos-addons](https://github.com/andlo/haos-ovos-addons) — the Supervisor add-ons this
-  integration would read shared config from and complement.
-- [ovos-skill-browser](https://github.com/andlo/ovos-skill-browser) — installs skills; this
-  integration would surface their settings once installed.
-- [haos-ovos-skills](https://github.com/andlo/haos-ovos-skills) — deferred; if built, would
-  also need to write its config under the same shared `/share/ovos/...` convention.
+  integration reads shared config from and complements.
+- [haos-ovos-skills](https://github.com/andlo/haos-ovos-skills) — the API this integration's
+  config subentries call to install/list/remove skills and read/write their settings.

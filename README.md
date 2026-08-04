@@ -18,13 +18,14 @@ entities under Settings → Devices & services, not raw JSON fields or a bespoke
 
 Two things it aims to do:
 
-1. **Shared OVOS configuration** (language, location, units) — v1, implemented: reads/writes
-   `/share/mycroft/mycroft.conf` directly (plain JSON, not `ovos-config` yet — see
-   `DEVELOPER.md`), pre-filled from `hass.config` where possible, exposed as `text`/`number`/
-   `select` entities.
-2. **Per-skill settings** — not started. Would read installed skills' `settingsmeta.json`
-   (OVOS's own existing convention for describing configurable skill settings) and generate
-   matching HA entities automatically, instead of a separate skill-config UI.
+1. **Shared OVOS configuration** (language, location, units) — v1, implemented and verified:
+   reads/writes `/share/mycroft/mycroft.conf` directly (plain JSON, not `ovos-config` yet —
+   see `DEVELOPER.md`), pre-filled from `hass.config` where possible, exposed as `text`/
+   `number`/`select` entities on a 30s-polling `DataUpdateCoordinator`.
+2. **Per-skill management via config subentries** — not started. One subentry per installed
+   skill, calling a small API in [haos-ovos-skills](https://github.com/andlo/haos-ovos-skills)
+   to install/remove and generate settings from each skill's `settingsmeta.json`. Replaces
+   the earlier standalone-webapp plan (`ovos-skill-browser`, now archived).
 
 See [DEVELOPER.md](DEVELOPER.md) for the architecture, open questions, and how this relates
 to the other HA-OVOS repos.
@@ -34,8 +35,8 @@ to the other HA-OVOS repos.
 Part of the **HA-OVOS** project: making it easy for a Home Assistant OS user to discover and
 use OpenVoiceOS, through interfaces that feel native to HAOS. See
 [haos-ovos-addons](https://github.com/andlo/haos-ovos-addons) for the Supervisor add-ons and
-[ovos-skill-browser](https://github.com/andlo/ovos-skill-browser) for the web-based skill
-store.
+[haos-ovos-skills](https://github.com/andlo/haos-ovos-skills) for the skill-management API
+this integration's config subentries call.
 
 ## License
 
