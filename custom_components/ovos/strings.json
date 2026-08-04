@@ -56,9 +56,10 @@
       },
       "step": {
         "user": {
-          "title": "Autoconfigure TTS/STT",
-          "description": "Picks a TTS/STT plugin for the language already set (see the Language text entity), the same way OVOS's own 'ovos-config autoconfigure' does. Writes into the shared config -- each Wyoming add-on (TTS/STT/wakeword) already prefers this over its own 'plugin' option once set, so this takes effect on their next restart. Manually editing the shared mycroft.conf, or each add-on's own 'plugin' option, both still work exactly as before -- this is just a guided shortcut to the same shared value.",
+          "title": "Autoconfigure text-to-speech & speech-to-text",
+          "description": "Automatically picks a text-to-speech and speech-to-text engine for a language, based on whether you want it to work offline or online, and a male or female voice. This writes into the settings your TTS/STT/wake word add-ons already read, so they'll use it the next time they restart. Setting up each add-on's own 'plugin' field directly, or editing the shared config file by hand, both still work exactly as before -- this is just a guided shortcut to the same setting.",
           "data": {
+            "lang": "Language",
             "mode": "Voice mode",
             "voice": "Voice gender"
           }
@@ -66,9 +67,10 @@
       },
       "abort": {
         "no_core_api_url": "Set the \"Core API URL\" text field (under the OpenVoiceOS integration's own entities) to your ovos-core add-on's address first, e.g. http://<hostname>:8500.",
-        "core_unreachable": "Could not reach ovos-core at the configured Core API URL -- autoconfigure needs ovos-core installed and running (it's what actually runs OVOS's own autoconfigure logic).",
-        "autoconfigure_failed": "ovos-core's /autoconfigure call failed -- check that the add-on is running and the Core API URL is correct.",
-        "autoconfigure_success": "Done for {lang}. Changed: {changed}. TTS/STT/wakeword add-ons will pick this up on their next restart."
+        "core_unreachable": "Couldn't reach the ovos-core add-on at the configured Core API URL. This feature needs ovos-core installed and running.",
+        "autoconfigure_failed": "Something went wrong picking a text-to-speech/speech-to-text engine. Check that the ovos-core add-on is running and the Core API URL is correct.",
+        "autoconfigure_nothing_found": "No text-to-speech/speech-to-text option was found for {lang} with that combination. Try a different voice mode or gender, or leave voice gender unset.",
+        "autoconfigure_success": "Done for {lang}. Text-to-speech will use \"{tts_module}\"; speech-to-text will use \"{stt_module}\". Restart the TTS/STT add-ons to pick this up. If either one doesn't start afterwards, add its name under that add-on's own \"Extra pip packages\" setting."
       }
     }
   }
