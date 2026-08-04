@@ -56,12 +56,16 @@ place as everything else in HA, and it directly answers that repo's one open que
 Install actually reach a live instance?") by construction — the integration calls the API
 itself, no ambiguity.
 
-**Add flow**: dropdown of the official OVOS skill catalog (36 skills — confirmed via the
-GitHub API, genuinely small enough for a dropdown; see `haos-ovos-addons`'s `ovos-skills/DOCS.md`
-for the count and how it was checked). Picking one calls `ovos-skills`'s install API. Labels
-fold in a short catalog description (`"Name — description…"`) since HA's `select` selector
-has no secondary/subtitle line — confirmed against the selector docs, a real two-line
-dropdown would need a custom frontend card, out of scope here.
+**Add flow**: two steps, not one. Originally a single dropdown of the official OVOS skill
+catalog (36 skills — confirmed via the GitHub API, genuinely small enough for a dropdown; see
+`haos-ovos-addons`'s `ovos-skills/DOCS.md` for the count and how it was checked) with labels
+folding in a short description (`"Name — description…"`), since HA's `select` selector has no
+secondary/subtitle line. In practice, confirmed by screenshot, that combined label was
+genuinely hard to scan — each option wrapped onto multiple visual lines across 36 entries.
+Split into: a compact, name-only dropdown first, then a confirmation step showing the
+selected skill's full description as plain text before the install actually starts. Keeps
+the list scannable without losing the description entirely. Picking a skill and confirming
+calls `ovos-skills`'s install API.
 
 **Per-subentry config**: a `reconfigure` step, but *only* when there's a real, fully-mappable
 `settingsmeta.json` to build a form from. Confirmed for real by installing multiple skills:
@@ -74,6 +78,22 @@ simply don't offer reconfigure — an early version fell back to a raw-JSON edit
 but that added a second, differently-shaped code path for what's conceptually "no settings
 available" and didn't match how the person actually wanted to think about it: has settings,
 or doesn't. Removed in favor of a clean abort.
+
+**Considered and rejected: two subentry types.** Since `supports_reconfigure` is declared per
+subentry *type*, not per instance, every skill shows a "Reconfigure" option even when it has
+no settings — clicking it just gets the clean abort message above. The obvious-looking fix
+was splitting into two types, `skill` (no reconfigure) and `skill_advanced` (has it), with a
+periodic background check that deletes and recreates a subentry under the other type once a
+settingsmeta is discovered (`ConfigSubentry` is a frozen dataclass — `subentry_type` can't be
+changed in place, confirmed by reading HA core's own source directly, so this would always
+have been delete-and-recreate with the same `unique_id`/title, not a true in-place upgrade).
+Rejected once a genuine blocker surfaced: `strings.json`'s `initiate_flow` key implies every
+registered subentry type gets its own visible "Add [type]" entry in the UI — there's no
+documented way to register a type usable only programmatically, hidden from that menu. Adding
+`skill_advanced` would've meant showing "Skill" *and* "Skill (advanced)" as two separate,
+confusing manual-add options, trading a small, already-handled ambiguity (a clear error
+message on click) for a new, more visible one (which of two similarly-named things do I add).
+Kept the single-type design with the clean abort message instead.
 
 Also surfaced a real gotcha: the catalog's `package_name` field doesn't always match what pip
 actually installs a skill as (confirmed: catalog says `ovos-skill-ovos-fallback-chatgpt`,
