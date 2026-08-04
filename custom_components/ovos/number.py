@@ -11,10 +11,18 @@ from .shared_config import read_shared_config, write_shared_config_key
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities):
+    shared = await hass.async_add_executor_job(read_shared_config)
+    coordinate = shared.get("location", {}).get("coordinate", {})
     add_entities(
         [
-            OvosCoordinateNumber(entry, "latitude", "Latitude", "mdi:latitude"),
-            OvosCoordinateNumber(entry, "longitude", "Longitude", "mdi:longitude"),
+            OvosCoordinateNumber(
+                entry, "latitude", "Latitude", "mdi:latitude",
+                coordinate.get("latitude", entry.data[CONF_LATITUDE]),
+            ),
+            OvosCoordinateNumber(
+                entry, "longitude", "Longitude", "mdi:longitude",
+                coordinate.get("longitude", entry.data[CONF_LONGITUDE]),
+            ),
         ]
     )
 
@@ -30,14 +38,15 @@ class OvosCoordinateNumber(NumberEntity):
     _attr_native_max_value = 180.0
     _attr_native_step = 0.000001
 
-    def __init__(self, entry: ConfigEntry, field: str, name: str, icon: str) -> None:
+    def __init__(
+        self, entry: ConfigEntry, field: str, name: str, icon: str, current_value: float
+    ) -> None:
         self._entry = entry
         self._field = field
         self._attr_name = name
         self._attr_icon = icon
         self._attr_unique_id = f"{entry.entry_id}_{field}"
-        conf_key = CONF_LATITUDE if field == "latitude" else CONF_LONGITUDE
-        self._attr_native_value = entry.data[conf_key]
+        self._attr_native_value = current_value
 
     def _write(self) -> None:
         location = read_shared_config().get("location", {})

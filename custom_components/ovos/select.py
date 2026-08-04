@@ -7,11 +7,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 
 from .const import DOMAIN, CONF_SYSTEM_UNIT, UNIT_METRIC, UNIT_IMPERIAL
-from .shared_config import write_shared_config_key
+from .shared_config import read_shared_config, write_shared_config_key
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities):
-    add_entities([OvosSystemUnitSelect(entry)])
+    shared = await hass.async_add_executor_job(read_shared_config)
+    current = shared.get(CONF_SYSTEM_UNIT, entry.data[CONF_SYSTEM_UNIT])
+    add_entities([OvosSystemUnitSelect(entry, current)])
 
 
 class OvosSystemUnitSelect(SelectEntity):
@@ -23,10 +25,10 @@ class OvosSystemUnitSelect(SelectEntity):
     _attr_entity_category = EntityCategory.CONFIG
     _attr_options = [UNIT_METRIC, UNIT_IMPERIAL]
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: ConfigEntry, current_value: str) -> None:
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_system_unit"
-        self._attr_current_option = entry.data[CONF_SYSTEM_UNIT]
+        self._attr_current_option = current_value
 
     async def async_select_option(self, option: str) -> None:
         self._attr_current_option = option
