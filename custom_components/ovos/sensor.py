@@ -37,24 +37,19 @@ def _get_skills_api_url() -> str | None:
 
 
 def _fetch_installed_versions(api_url: str) -> dict[str, str]:
-    """package_name -> installed version, from ovos-skills' own /skills
-    endpoint (a pip list under the hood). Best-effort in two ways: (1) a
+    """skill_id -> installed version, from ovos-skills' own /skills
+    endpoint. Keyed by skill_id, not package_name -- ovos-skills now
+    installs each skill into its own isolated venv and tracks the
+    confirmed-real skill_id/package_name pair directly in its manifest
+    (see its api.py), so this is an exact, reliable match rather than
+    the earlier fuzzy-matching-needed guess. Best-effort still: a
     failure here just means the sensor shows "unknown" rather than
-    blocking the device from existing at all; (2) exact-match only --
-    the catalog's package_name doesn't always match the real installed
-    name 1:1 (confirmed elsewhere in this project, e.g.
-    skill-ovos-fallback-chatgpt installs under a different name than its
-    own catalog entry says), so some correctly-installed skills will
-    still show "unknown" here. Same fuzzy-match fallback ovos-skills'
-    own api.py already uses internally (_find_installed_package) would
-    fix this properly -- not pulled in here yet, left for a follow-up
-    that exposes it as its own endpoint rather than duplicating the
-    matching logic in two repos.
+    blocking the device from existing at all.
     """
     try:
         resp = requests.get(f"{api_url}/skills", timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
-        return {s["name"]: s["version"] for s in resp.json().get("skills", [])}
+        return {s["skill_id"]: s["version"] for s in resp.json().get("skills", [])}
     except requests.RequestException:
         return {}
 
@@ -70,11 +65,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
         if subentry.subentry_type != "skill":
             continue
         skill_id = subentry.data["skill_id"]
-        package_name = subentry.data.get("package_name", "")
         add_entities(
             [
                 OvosSkillVersionSensor(
-                    subentry_id, skill_id, subentry.title, versions.get(package_name)
+                    subentry_id, skill_id, subentry.title, versions.get(skill_id)
                 )
             ],
             config_subentry_id=subentry_id,
