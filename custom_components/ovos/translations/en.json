@@ -31,6 +31,10 @@
             "skill_id": "Skill"
           }
         },
+        "confirm": {
+          "title": "{name}",
+          "description": "{description}"
+        },
         "reconfigure_fields": {
           "title": "Skill settings",
           "description": "This skill's settingsmeta.json only uses field types we've confirmed how to map to a real form (checkboxes)."

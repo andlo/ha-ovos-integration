@@ -1,13 +1,12 @@
 """Subentry flow for managing OVOS skills — one subentry per installed skill.
 
-Add flow: dropdown of the official catalog (36 skills, confirmed small
-enough — see haos-ovos-addons/ovos-skills/DOCS.md), picking one calls that
-add-on's /skills/install (fire-and-poll, matching its own async design —
-see that repo's DEVELOPER.md for why a blocking call would be wrong here).
-Dropdown labels fold in a short description — HA's select selector has no
-secondary/subtitle line (confirmed against the selector docs), so a
-one-line "Name — description" is the only way to show more than the bare
-name without a custom frontend card, out of scope here.
+Add flow: two steps, not one. A single dropdown with "Name — description"
+per option (36 catalog entries) turned out genuinely hard to scan in
+practice — each option wrapping onto multiple visual lines in the actual
+HA frontend, confirmed by screenshot, not just a guess. Step one is a
+compact, name-only dropdown; step two shows the selected skill's full
+description as plain text before kicking off the install. Keeps the list
+scannable without losing the description entirely.
 
 Reconfigure flow: edits a skill's settings.json, but ONLY when there's a
 settingsmeta.json with exclusively confirmed-mappable fields (currently
@@ -33,20 +32,9 @@ REQUEST_TIMEOUT = 10  # catalog fetch / kicking off install — not waiting
                        # for pip itself, which the add-on's own API already
                        # doesn't block on (see its /skills/install design)
 
-MAX_DESCRIPTION_LEN = 60
-
 
 def _get_skills_api_url() -> str | None:
     return read_shared_config().get(CONF_SKILLS_API_URL) or None
-
-
-def _dropdown_label(item: dict) -> str:
-    desc = (item.get("description") or "").strip().split("\n")[0]
-    if not desc:
-        return item["name"]
-    if len(desc) > MAX_DESCRIPTION_LEN:
-        desc = desc[:MAX_DESCRIPTION_LEN].rstrip() + "…"
-    return f"{item['name']} — {desc}"
 
 
 class SkillSubentryFlowHandler(ConfigSubentryFlow):
@@ -63,13 +51,34 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
         if catalog is None:
             return self.async_abort(reason="catalog_unreachable")
 
-        skills_by_id = {item["skill_id"]: item for item in catalog}
+        self._skills_by_id = {item["skill_id"]: item for item in catalog}
 
         if user_input is not None:
-            skill = skills_by_id.get(user_input["skill_id"])
+            skill = self._skills_by_id.get(user_input["skill_id"])
             if skill is None:
                 return self.async_abort(reason="unknown_skill")
+            self._selected_skill = skill
+            return await self.async_step_confirm()
 
+        # Name-only, sorted — a "Name — description" label per option was
+        # confirmed genuinely hard to scan across 36 entries (each
+        # wrapping onto multiple lines in the real frontend). The
+        # description shows on the next step instead.
+        options = sorted(
+            self._skills_by_id.items(), key=lambda kv: kv[1]["name"].lower()
+        )
+        schema = vol.Schema(
+            {vol.Required("skill_id"): vol.In({sid: item["name"] for sid, item in options})}
+        )
+        return self.async_show_form(step_id="user", data_schema=schema)
+
+    async def async_step_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        skill = self._selected_skill
+        api_url = await self.hass.async_add_executor_job(_get_skills_api_url)
+
+        if user_input is not None:
             ok = await self.hass.async_add_executor_job(
                 self._start_install, api_url, skill["source"]
             )
@@ -86,12 +95,15 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
                 unique_id=skill["skill_id"],
             )
 
-        schema = vol.Schema(
-            {vol.Required("skill_id"): vol.In(
-                {sid: _dropdown_label(item) for sid, item in skills_by_id.items()}
-            )}
+        description = (skill.get("description") or "").strip() or "No description available."
+        return self.async_show_form(
+            step_id="confirm",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "name": skill["name"],
+                "description": description,
+            },
         )
-        return self.async_show_form(step_id="user", data_schema=schema)
 
     @staticmethod
     def _fetch_catalog(api_url: str) -> list[dict] | None:
