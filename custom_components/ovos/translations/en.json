@@ -16,5 +16,28 @@
     "abort": {
       "already_configured": "Already configured \u2014 only one shared config entry is needed."
     }
+  },
+  "config_subentries": {
+    "skill": {
+      "title": "OVOS skill",
+      "initiate_flow": {
+        "user": "Add skill"
+      },
+      "step": {
+        "user": {
+          "title": "Add an OVOS skill",
+          "description": "Pick a skill from the official OVOS catalog to install.",
+          "data": {
+            "skill_id": "Skill"
+          }
+        }
+      },
+      "abort": {
+        "no_api_url": "Set the \"Skills API URL\" text field (under the OpenVoiceOS integration's own entities) to your ovos-skills add-on's address first, e.g. http://<hostname>:8500.",
+        "catalog_unreachable": "Could not reach the skill catalog via the configured Skills API URL.",
+        "unknown_skill": "That skill could not be found in the catalog.",
+        "install_request_failed": "Could not start the install \u2014 check that the ovos-skills add-on is running and the Skills API URL is correct."
+      }
+    }
   }
 }

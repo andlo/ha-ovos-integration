@@ -16,3 +16,11 @@ CONF_SYSTEM_UNIT = "system_unit"
 
 UNIT_METRIC = "metric"
 UNIT_IMPERIAL = "imperial"
+
+# The ovos-skills add-on's own base URL (e.g. http://<hostname>:8500) — its
+# Supervisor-assigned hostname is repo-hash-specific and not something we
+# can guess reliably, so this is a person-provided value, same pattern as
+# the other shared-config fields: a text entity, seeded once, editable
+# any time. Stored under a top-level key of its own, not nested under
+# "skills" (that section is SkillsStore's own, on the ovos-skills side).
+CONF_SKILLS_API_URL = "ha_ovos_skills_api_url"

@@ -10,6 +10,7 @@ from __future__ import annotations
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigEntry, ConfigSubentryFlow
 from homeassistant.core import callback
 
 from .const import (
@@ -22,6 +23,7 @@ from .const import (
     UNIT_METRIC,
     UNIT_IMPERIAL,
 )
+from .skill_subentry import SkillSubentryFlowHandler
 
 
 def _guess_lang(hass) -> str:
@@ -46,6 +48,16 @@ class OvosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle the initial setup — one entry only, this is shared config."""
 
     VERSION = 1
+
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """Skills are managed as subentries under this one entry —
+        Settings → Devices & services → OpenVoiceOS → Add sub-entry.
+        """
+        return {"skill": SkillSubentryFlowHandler}
 
     async def async_step_user(self, user_input=None):
         # Only one entry makes sense — this is *the* shared config, not a
