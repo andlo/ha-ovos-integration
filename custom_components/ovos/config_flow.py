@@ -24,6 +24,7 @@ from .const import (
     UNIT_IMPERIAL,
 )
 from .skill_subentry import SkillSubentryFlowHandler
+from .voice_subentry import AutoconfigureSubentryFlowHandler
 
 
 def _guess_lang(hass) -> str:
@@ -57,7 +58,10 @@ class OvosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Skills are managed as subentries under this one entry —
         Settings → Devices & services → OpenVoiceOS → Add sub-entry.
         """
-        return {"skill": SkillSubentryFlowHandler}
+        return {
+            "skill": SkillSubentryFlowHandler,
+            "autoconfigure": AutoconfigureSubentryFlowHandler,
+        }
 
     async def async_step_user(self, user_input=None):
         # Only one entry makes sense — this is *the* shared config, not a

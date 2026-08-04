@@ -24,3 +24,9 @@ UNIT_IMPERIAL = "imperial"
 # any time. Stored under a top-level key of its own, not nested under
 # "skills" (that section is SkillsStore's own, on the ovos-skills side).
 CONF_SKILLS_API_URL = "ha_ovos_skills_api_url"
+
+# Same pattern, for ovos-core's own base URL (e.g. http://<hostname>:8500)
+# -- needed to call its /autoconfigure endpoint (see voice_subentry.py).
+# Same reasoning as CONF_SKILLS_API_URL: repo-hash-specific hostname,
+# person-provided, a text entity rather than guessed.
+CONF_CORE_API_URL = "ha_ovos_core_api_url"

@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "OpenVoiceOS",
-        "description": "Pre-filled from your Home Assistant settings where possible \u2014 edit anything that doesn't match what you want OVOS to use.",
+        "description": "Pre-filled from your Home Assistant settings where possible — edit anything that doesn't match what you want OVOS to use.",
         "data": {
           "lang": "Language",
           "latitude": "Latitude",
@@ -14,7 +14,7 @@
       }
     },
     "abort": {
-      "already_configured": "Already configured \u2014 only one shared config entry is needed."
+      "already_configured": "Already configured — only one shared config entry is needed."
     }
   },
   "config_subentries": {
@@ -44,9 +44,31 @@
         "no_api_url": "Set the \"Skills API URL\" text field (under the OpenVoiceOS integration's own entities) to your ovos-skills add-on's address first, e.g. http://<hostname>:8500.",
         "catalog_unreachable": "Could not reach the skill catalog via the configured Skills API URL.",
         "unknown_skill": "That skill could not be found in the catalog.",
-        "install_request_failed": "Could not start the install \u2014 check that the ovos-skills add-on is running and the Skills API URL is correct.",
-        "settings_write_failed": "Could not save settings \u2014 check that the ovos-skills add-on is running and the Skills API URL is correct.",
-        "no_settings_available": "This skill doesn't have any settings that can be edited here \u2014 it either has no settingsmeta.json, or uses field types not yet supported by this form."
+        "install_request_failed": "Could not start the install — check that the ovos-skills add-on is running and the Skills API URL is correct.",
+        "settings_write_failed": "Could not save settings — check that the ovos-skills add-on is running and the Skills API URL is correct.",
+        "no_settings_available": "This skill doesn't have any settings that can be edited here — it either has no settingsmeta.json, or uses field types not yet supported by this form."
+      }
+    },
+    "autoconfigure": {
+      "title": "OVOS voice setup",
+      "initiate_flow": {
+        "user": "Autoconfigure voice"
+      },
+      "step": {
+        "user": {
+          "title": "Autoconfigure TTS/STT",
+          "description": "Picks a TTS/STT plugin for the language already set (see the Language text entity), the same way OVOS's own 'ovos-config autoconfigure' does. Writes into the shared config -- each Wyoming add-on (TTS/STT/wakeword) already prefers this over its own 'plugin' option once set, so this takes effect on their next restart. Manually editing the shared mycroft.conf, or each add-on's own 'plugin' option, both still work exactly as before -- this is just a guided shortcut to the same shared value.",
+          "data": {
+            "mode": "Voice mode",
+            "voice": "Voice gender"
+          }
+        }
+      },
+      "abort": {
+        "no_core_api_url": "Set the \"Core API URL\" text field (under the OpenVoiceOS integration's own entities) to your ovos-core add-on's address first, e.g. http://<hostname>:8500.",
+        "core_unreachable": "Could not reach ovos-core at the configured Core API URL -- autoconfigure needs ovos-core installed and running (it's what actually runs OVOS's own autoconfigure logic).",
+        "autoconfigure_failed": "ovos-core's /autoconfigure call failed -- check that the add-on is running and the Core API URL is correct.",
+        "autoconfigure_success": "Done for {lang}. Changed: {changed}. TTS/STT/wakeword add-ons will pick this up on their next restart."
       }
     }
   }
