@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "OpenVoiceOS shared config",
+        "description": "Pre-filled from your Home Assistant settings where possible \u2014 edit anything that doesn't match what you want OVOS to use.",
+        "data": {
+          "lang": "Language",
+          "latitude": "Latitude",
+          "longitude": "Longitude",
+          "timezone": "Timezone",
+          "system_unit": "System unit"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Already configured \u2014 only one shared config entry is needed."
+    }
+  }
+}
