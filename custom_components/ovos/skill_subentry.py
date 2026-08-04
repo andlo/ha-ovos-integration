@@ -20,6 +20,7 @@ this UI, not a lesser version of one that is.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import requests
@@ -28,6 +29,8 @@ from homeassistant.config_entries import ConfigSubentryFlow, SubentryFlowResult
 
 from .const import DOMAIN, CONF_SKILLS_API_URL
 from .shared_config import read_shared_config
+
+_LOGGER = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = 10  # catalog fetch / kicking off install — not waiting
                        # for pip itself, which the add-on's own API already
@@ -126,6 +129,10 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
 
         skill_id = subentry.data["skill_id"]
         package_name = subentry.data.get("package_name", "")
+        _LOGGER.warning(
+            "SETTINGSMETA DEBUG: subentry.data=%s, skill_id=%r, package_name=%r",
+            dict(subentry.data), skill_id, package_name,
+        )
         meta = await self.hass.async_add_executor_job(
             self._fetch_settingsmeta, api_url, skill_id, package_name
         )
@@ -182,16 +189,18 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
 
     @staticmethod
     def _fetch_settingsmeta(api_url: str, skill_id: str, package_name: str) -> dict | None:
+        url = f"{api_url}/skills/{skill_id}/settingsmeta"
         try:
-            resp = requests.get(
-                f"{api_url}/skills/{skill_id}/settingsmeta",
-                params={"package_name": package_name},
-                timeout=REQUEST_TIMEOUT,
+            resp = requests.get(url, params={"package_name": package_name}, timeout=REQUEST_TIMEOUT)
+            _LOGGER.warning(
+                "SETTINGSMETA DEBUG: GET %s?package_name=%s -> %s %s",
+                url, package_name, resp.status_code, resp.text[:300],
             )
             if resp.status_code != 200:
                 return None
             return resp.json()
-        except requests.RequestException:
+        except requests.RequestException as exc:
+            _LOGGER.warning("SETTINGSMETA DEBUG: request to %s failed: %s", url, exc)
             return None
 
     @staticmethod
