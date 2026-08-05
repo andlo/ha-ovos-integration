@@ -46,7 +46,9 @@
         "unknown_skill": "That skill could not be found in the catalog.",
         "install_request_failed": "Could not start the install — check that the ovos-skills add-on is running and the Skills API URL is correct.",
         "settings_write_failed": "Could not save settings — check that the ovos-skills add-on is running and the Skills API URL is correct.",
-        "no_settings_available": "This skill doesn't have any settings that can be edited here yet. That usually means it hasn't loaded and saved its own settings file yet -- try again in a minute, or after restarting the ovos-skills add-on."
+        "no_settings_available": "This skill doesn't have any settings that can be edited here yet. That usually means it hasn't loaded and saved its own settings file yet -- try again in a minute, or after restarting the ovos-skills add-on.",
+        "install_timed_out": "The install is taking longer than expected (over 3 minutes). It may still finish in the background — check the ovos-skills add-on's log, then try adding this skill again.",
+        "install_failed": "The install failed: {error}"
       }
     },
     "autoconfigure": {

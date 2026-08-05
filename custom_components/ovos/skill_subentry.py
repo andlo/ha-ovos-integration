@@ -57,6 +57,8 @@ version of one that is.
 """
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import Any
 
 import requests
@@ -70,6 +72,11 @@ from .shared_config import read_shared_config
 REQUEST_TIMEOUT = 10  # catalog fetch / kicking off install — not waiting
                        # for pip itself, which the add-on's own API already
                        # doesn't block on (see its /skills/install design)
+
+# A fresh venv + full dependency install can genuinely take 1-2 minutes
+# on real hardware (confirmed this session) -- generous but bounded.
+INSTALL_POLL_TIMEOUT = 180
+INSTALL_POLL_INTERVAL = 3
 
 SENSITIVE_NAME_HINTS = ("key", "token", "secret", "password")
 
@@ -150,14 +157,36 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
             if not ok:
                 return self.async_abort(reason="install_request_failed")
 
+            # Wait for the real result instead of firing-and-forgetting --
+            # confirmed for real this session: the catalog's own
+            # skill_id doesn't reliably match what a skill actually
+            # registers as at runtime (ovos-skills' entry_points-based
+            # discovery, e.g. "skill-ovos-date-time..." in the catalog
+            # vs. the real "ovos-skill-date-time..."), so creating the
+            # subentry with the catalog's guess silently broke
+            # settingsmeta/settings lookups for every skill installed
+            # this way. This also stops a skill that never actually
+            # started (like an earlier real case, a dependency conflict
+            # that left the skill installed but never running) from
+            # getting a subentry that implies it's usable.
+            result = await self._wait_for_install(api_url, skill["source"])
+            if result is None:
+                return self.async_abort(reason="install_timed_out")
+            if result.get("status") != "complete":
+                return self.async_abort(
+                    reason="install_failed",
+                    description_placeholders={"error": result.get("error", "unknown error")},
+                )
+
+            real_skill_id = result["skill_id"]
             return self.async_create_entry(
                 title=skill["name"],
                 data={
-                    "skill_id": skill["skill_id"],
+                    "skill_id": real_skill_id,
                     "source": skill["source"],
                     "package_name": skill.get("package_name", ""),
                 },
-                unique_id=skill["skill_id"],
+                unique_id=real_skill_id,
             )
 
         description = (skill.get("description") or "").strip() or "No description available."
@@ -190,6 +219,34 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
             return resp.status_code == 200
         except requests.RequestException:
             return False
+
+    async def _wait_for_install(self, api_url: str, source_url: str) -> dict | None:
+        """Poll /skills/install/status until it reports complete/failed,
+        or None on timeout. See async_step_confirm for why this matters
+        now (the confirmed-real skill_id only exists once this
+        finishes).
+        """
+        deadline = time.monotonic() + INSTALL_POLL_TIMEOUT
+        while time.monotonic() < deadline:
+            status = await self.hass.async_add_executor_job(
+                self._poll_status, api_url, source_url
+            )
+            if status is not None and status.get("status") in ("complete", "failed"):
+                return status
+            await asyncio.sleep(INSTALL_POLL_INTERVAL)
+        return None
+
+    @staticmethod
+    def _poll_status(api_url: str, key: str) -> dict | None:
+        try:
+            resp = requests.get(
+                f"{api_url}/skills/install/status", params={"key": key}, timeout=REQUEST_TIMEOUT,
+            )
+            if resp.status_code != 200:
+                return None
+            return resp.json()
+        except requests.RequestException:
+            return None
 
     # --- reconfigure: edit an existing skill's settings.json ---
 
