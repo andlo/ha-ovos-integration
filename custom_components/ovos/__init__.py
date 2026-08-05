@@ -15,7 +15,7 @@ from .const import (
 from .coordinator import OvosSharedConfigCoordinator
 from .shared_config import write_shared_config_key
 
-PLATFORMS = ["text", "number", "select", "sensor"]
+PLATFORMS = ["text", "number", "select", "sensor", "conversation"]
 
 
 def _seed_missing_keys(current: dict, entry: ConfigEntry) -> bool:
