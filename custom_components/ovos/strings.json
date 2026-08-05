@@ -94,7 +94,7 @@
         "persona_unreachable": "Couldn't reach the ovos-persona add-on at the configured Persona API URL. This feature needs ovos-persona installed and running.",
         "no_solvers_found": "No solver plugins were found installed in the ovos-persona add-on -- nothing to choose from yet.",
         "settings_write_failed": "Could not save the solver list -- check that the ovos-persona add-on is running and the Persona API URL is correct.",
-        "persona_success": "Done. Active solvers, in order: {solvers}. The ovos-persona add-on has restarted to apply this."
+        "persona_success": "Done. Active solvers, in order: {solvers}.{fallback_note} The ovos-persona add-on has restarted to apply this."
       }
     }
   }

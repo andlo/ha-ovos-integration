@@ -38,3 +38,9 @@ CONF_CORE_API_URL = "ha_ovos_core_api_url"
 # ovos-skills without ovos-persona, or both -- raised directly, see
 # DEVELOPER.md.
 CONF_PERSONA_API_URL = "ha_ovos_persona_api_url"
+
+# Same pattern again, for the ovos-skills-extra add-on's own base URL
+# (e.g. http://<hostname>:8502). Deliberately independent, same
+# reasoning as the other three -- ovos-skills-extra is entirely
+# optional, a person may run only the curated ovos-skills, or neither.
+CONF_SKILLS_EXTRA_API_URL = "ha_ovos_skills_extra_api_url"
