@@ -30,3 +30,11 @@ CONF_SKILLS_API_URL = "ha_ovos_skills_api_url"
 # Same reasoning as CONF_SKILLS_API_URL: repo-hash-specific hostname,
 # person-provided, a text entity rather than guessed.
 CONF_CORE_API_URL = "ha_ovos_core_api_url"
+
+# Same pattern again, for ovos-persona's own bridge API (e.g.
+# http://<hostname>:8338 -- see persona_subentry.py). Deliberately
+# independent of CONF_SKILLS_API_URL/CONF_CORE_API_URL, not derived from
+# either: a person can genuinely run ovos-persona without ovos-skills,
+# ovos-skills without ovos-persona, or both -- raised directly, see
+# DEVELOPER.md.
+CONF_PERSONA_API_URL = "ha_ovos_persona_api_url"
