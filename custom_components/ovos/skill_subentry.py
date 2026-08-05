@@ -151,8 +151,25 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
         api_url = await self.hass.async_add_executor_job(_get_skills_api_url)
 
         if user_input is not None:
+            # Prefer the catalog's own package_name over its source
+            # (git URL) when both are given -- confirmed for real, this
+            # session: deriving a PyPI candidate FROM the git URL
+            # (ovos-skills' own _repo_name_from_git_url) doesn't always
+            # match the real PyPI name (skill-ovos-stop's repo name vs.
+            # its real package "ovos-skill-stop"), so installing via the
+            # bare source URL silently fell back to a git/dev-branch
+            # version missing a transitive dependency
+            # (ModuleNotFoundError: ovos_plugin_manager). This
+            # integration's own catalog already carries the
+            # CONFIRMED-correct PyPI name for every curated entry
+            # (verified directly while building that list) -- using it
+            # here is more reliable than re-deriving one from the URL a
+            # second time. Falls back to source if package_name is
+            # somehow empty.
+            install_source = skill.get("package_name") or skill["source"]
+
             ok = await self.hass.async_add_executor_job(
-                self._start_install, api_url, skill["source"]
+                self._start_install, api_url, install_source
             )
             if not ok:
                 return self.async_abort(reason="install_request_failed")
@@ -169,7 +186,7 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
             # started (like an earlier real case, a dependency conflict
             # that left the skill installed but never running) from
             # getting a subentry that implies it's usable.
-            result = await self._wait_for_install(api_url, skill["source"])
+            result = await self._wait_for_install(api_url, install_source)
             if result is None:
                 return self.async_abort(reason="install_timed_out")
             if result.get("status") != "complete":
