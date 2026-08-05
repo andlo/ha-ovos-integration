@@ -1,188 +1,27 @@
 # Developer notes — ha-ovos-integration
 
-🚧 Planning stage. This describes the idea and the open questions to resolve before writing
-code, not a finished spec.
-
 ## The idea
 
-The [haos-ovos-addons](https://github.com/andlo/haos-ovos-addons) plan originally called for
-either a shared `mycroft.conf` file, or per-add-on ingress config pages (the same pattern
-`ovos-skill-config-tool` uses). A real HA **integration** is a better fit than either:
+A real HA integration, not a bespoke webpage or per-add-on ingress page, fits how a HAOS user already expects to configure things: entities under Settings → Devices & services. OVOS skills already ship a `settingsmeta.json` describing their configurable fields — structurally the same thing HA integrations already do with their own config/options schemas, reused rather than reinvented.
 
-- It puts configuration where a HAOS user already looks — entities under
-  Settings → Devices & services — instead of a bespoke webpage they have to discover.
-- For skills specifically, OVOS skills already ship a `settingsmeta.json` describing their
-  configurable fields (name, type, default, description). That's structurally the same thing
-  HA integrations already do with their own config/options schemas — reusing it beats
-  inventing a third config format or wrapping `ovos-skill-config-tool` in ingress.
+Talks to the add-ons in [haos-ovos-addons](https://github.com/andlo/haos-ovos-addons). Open items and known gaps are tracked as [GitHub Issues](https://github.com/andlo/ha-ovos-integration/issues), not in this file.
 
-## Two things this integration aims to do
+## Shared configuration: polling, not file watching
 
-### 1. Shared OVOS configuration
+Entities (language, units, API URLs, ...) read `/share/mycroft/mycroft.conf` via a `DataUpdateCoordinator` on a 30s poll interval, not a file watcher. Deliberate: `watchdog`-style file events fire from an OS thread outside HA's asyncio loop (a real source of subtle bugs to bridge correctly); every add-on writes via atomic rename (`jq > file.tmp && mv file.tmp file`), which a watcher would need to specifically handle; and the data itself (language, location, units) changes a handful of times a year, not something that needs instant reactivity. A `DataUpdateCoordinator` also means one file read per interval serves every entity regardless of count — adding more entities later doesn't change this cost either way.
 
-Language, location, units, and other `mycroft.conf` fields, read/written via `ovos-config`
-and exposed as HA entities (select/text/number), so setting language once applies everywhere
-instead of every add-on holding its own disconnected copy.
+## Config flow pre-fill sources
 
-**Pre-fill the config flow from HA Core's own settings** — confirmed available directly on
-`hass.config` (checked against real system data, not assumed):
+The shared-config flow pre-fills from `hass.config` directly: `language`+`country` combine into OVOS's `lang` format (a suggested default, not locked — a household running OVOS in a different working language than HA's own UI is a real case); `time_zone` maps directly (IANA names match); `latitude`/`longitude` copy directly; `unit_system.length` (`"km"` vs `"mi"`) maps to `system_unit`. City/state breakdown isn't available from HA Core and is left blank rather than guessed.
 
-| HA Core field | Example value seen | Maps to `mycroft.conf` | Notes |
-|---|---|---|---|
-| `language` | `"en"` | `lang` | Needs a region suffix OVOS expects (e.g. `en-us`). HA only gives the bare language code — combine with `country` as a *suggested default*, not a hardcoded truth, and let the user confirm/edit. |
-| `country` | `"DK"` | (used to build `lang`) | See above — `f"{language}-{country}".lower()` is a reasonable guess, not guaranteed correct (e.g. `en-dk` isn't a real OVOS locale, just the best guess from what HA exposes). |
-| `time_zone` | `"Europe/Copenhagen"` | `location.timezone.code` | Direct IANA tz name match, no translation needed. |
-| `latitude` / `longitude` | `55.986...` / `12.497...` | `location.coordinate.latitude/longitude` | Direct copy. |
-| `unit_system.length` | `"km"` vs `"mi"` | `system_unit` (`metric`/`imperial`) | Check this one field: `"km"` → `metric`, `"mi"` → `imperial`. HA doesn't expose the whole unit system as a single flat label in the data we could inspect, this field is the reliable proxy. |
+## Skill management: one config subentry per skill
 
-**Not available from HA Core**: city/state name breakdown (`location.city.*` in
-`mycroft.conf`'s schema). HA only has a user-given `location_name` (e.g. "Hjem" —
-Danish for "Home", not a real place name) and raw coordinates, no structured city/country
-lookup. Leave that section of the config flow optional/blank rather than guessing from a
-freeform name, or reverse-geocode from lat/long if this ever feels worth the added
-dependency.
+**Two-step add flow**, not one: a name-only dropdown first, then a confirmation step showing the selected skill's full description before install starts. A single dropdown with "Name — description" per option was confirmed, by screenshot, to wrap onto multiple lines and become hard to scan once the catalog had more than a handful of entries.
 
-**Design principle**: pre-fill, don't lock. These are suggested defaults in the config flow
-form, editable before submit — HA's own settings are a good starting guess, not a source of
-truth OVOS must match exactly (a household using OVOS in a different working language than
-their HA install's UI language is a real, plausible case).
+**A single subentry type**, not two. Splitting into `skill` (no reconfigure) and `skill_advanced` (has settings) was considered, to avoid showing a "Reconfigure" option on skills with no settings — rejected because `strings.json`'s `initiate_flow` key means every registered subentry type gets its own visible "Add [type]" menu entry, with no documented way to register one hidden from that menu. Showing "Skill" and "Skill (advanced)" as two confusing, similarly-named add options was worse than the alternative: a single type, and a clean "no settings available" abort message on skills without any.
 
-### 2. Per-skill management via config subentries
+**The confirmed-real `skill_id`, not the catalog's guess, is what a subentry gets created with.** The install flow polls the add-on's own job status and waits for the real result — the catalog's own `skill_id` field doesn't reliably match what a skill actually registers as at runtime, and creating a subentry with the wrong one silently broke settings lookups for every skill installed that way.
 
-Skills are managed as **HA config subentries** — one per installed skill, living under this
-integration's main entry (Settings → Devices & services → OpenVoiceOS → Add sub-entry).
-Replaces the earlier plan of a standalone web app (`ovos-skill-browser`, now archived): same
-place as everything else in HA, and it directly answers that repo's one open question ("does
-Install actually reach a live instance?") by construction — the integration calls the API
-itself, no ambiguity.
+## Relationship to the other repo
 
-**Add flow**: two steps, not one. Originally a single dropdown of the official OVOS skill
-catalog (36 skills — confirmed via the GitHub API, genuinely small enough for a dropdown; see
-`haos-ovos-addons`'s `ovos-skills/DOCS.md` for the count and how it was checked) with labels
-folding in a short description (`"Name — description…"`), since HA's `select` selector has no
-secondary/subtitle line. In practice, confirmed by screenshot, that combined label was
-genuinely hard to scan — each option wrapped onto multiple visual lines across 36 entries.
-Split into: a compact, name-only dropdown first, then a confirmation step showing the
-selected skill's full description as plain text before the install actually starts. Keeps
-the list scannable without losing the description entirely. Picking a skill and confirming
-calls `ovos-skills`'s install API.
-
-**Per-subentry config**: a `reconfigure` step, but *only* when there's a real, fully-mappable
-`settingsmeta.json` to build a form from. Confirmed for real by installing multiple skills:
-not every skill has one (`date-time` does, `fallback-chatgpt` doesn't), and the only field
-type confirmed against real data is `checkbox` — its `settingsmeta.json` `"value"` is
-literally the string `"false"`, not a JSON boolean, which the reconfigure flow normalizes.
-Skills without a settingsmeta, or with field types we haven't confirmed how to map yet (e.g.
-`select`, seen mentioned in an OVOS community discussion but not verified against real data),
-simply don't offer reconfigure — an early version fell back to a raw-JSON editor for those,
-but that added a second, differently-shaped code path for what's conceptually "no settings
-available" and didn't match how the person actually wanted to think about it: has settings,
-or doesn't. Removed in favor of a clean abort.
-
-**Considered and rejected: two subentry types.** Since `supports_reconfigure` is declared per
-subentry *type*, not per instance, every skill shows a "Reconfigure" option even when it has
-no settings — clicking it just gets the clean abort message above. The obvious-looking fix
-was splitting into two types, `skill` (no reconfigure) and `skill_advanced` (has it), with a
-periodic background check that deletes and recreates a subentry under the other type once a
-settingsmeta is discovered (`ConfigSubentry` is a frozen dataclass — `subentry_type` can't be
-changed in place, confirmed by reading HA core's own source directly, so this would always
-have been delete-and-recreate with the same `unique_id`/title, not a true in-place upgrade).
-Rejected once a genuine blocker surfaced: `strings.json`'s `initiate_flow` key implies every
-registered subentry type gets its own visible "Add [type]" entry in the UI — there's no
-documented way to register a type usable only programmatically, hidden from that menu. Adding
-`skill_advanced` would've meant showing "Skill" *and* "Skill (advanced)" as two separate,
-confusing manual-add options, trading a small, already-handled ambiguity (a clear error
-message on click) for a new, more visible one (which of two similarly-named things do I add).
-Kept the single-type design with the clean abort message instead.
-
-Also surfaced a real gotcha: the catalog's `package_name` field doesn't always match what pip
-actually installs a skill as (confirmed: catalog says `ovos-skill-ovos-fallback-chatgpt`,
-real installed name is `skill-ovos-fallback-chatgpt`) — `ovos-skills`' settingsmeta lookup
-does a normalized fuzzy match against actually-installed packages instead of trusting the
-catalog's name literally.
-
-**Remove flow**: deleting the subentry calls the same add-on's uninstall API — confirmed
-working end-to-end on real hardware, including surviving a rebuild, but not yet wired up
-*here* (the subentry-deletion → API call hookup itself hasn't been built).
-
-**What this explicitly does NOT do**: make the skill respond to voice queries. Installing and
-configuring a skill here doesn't wire it into Assist — that needs OVOS's messagebus/HiveMind,
-which has no bridge into HA yet. See `ovos-skills`'s DOCS.md in haos-ovos-addons for the full reasoning on
-why that's an accepted, separate gap rather than a blocker.
-
-## Open questions — status as of tonight's spike
-
-### ✅ Filesystem access across HA Core and add-ons — resolved and implemented
-
-`/share/mycroft/mycroft.conf` is now the shared config path, and `haos-ovos-addons`'s four
-add-ons already write there (as of `haos-ovos-addons` commit extending the `/share`
-convention to stt/wakeword/persona). Confirmed on real hardware: all four add-ons build,
-start cleanly, and merge into the same file without clobbering each other's sections (each
-add-on does a read-merge-write of only its own top-level key, e.g. `tts`, `stt`, `hotwords`).
-
-This integration can now assume that path exists and is kept in sync by the add-ons — no
-further coordination needed on that side before starting on the integration itself.
-
-### ✅ Does `ovos-config` work standalone? — resolved, yes
-
-Confirmed via spike:
-- `Configuration()` loads in ~0.15s with **no messagebus connection** required.
-- Dependencies are lightweight and pure-Python (`combo-lock`, `ovos-utils`,
-  `python-dateutil`, `PyYAML`, `rich-click`; `ovos-utils` itself adds `json_database`,
-  `kthread`, `pexpect`, `pyee`, `requests`, `rich`, `watchdog`) — nothing that looks likely to
-  conflict badly with HA Core's own dependency set, though not yet tested installed
-  *alongside* HA Core specifically.
-- **It already respects `XDG_CONFIG_HOME`**, confirmed by setting it to a custom path and
-  seeing `Configuration()` resolve to `<path>/mycroft/mycroft.conf` accordingly. This is what
-  makes the shared `/share/mycroft/mycroft.conf` convention above work with zero custom code
-  on either side — both the add-ons and this integration just need `XDG_CONFIG_HOME=/share`
-  set in their respective environments, and `ovos-config`'s own logic does the rest.
-
-**Remaining unknown**: only whether installing `ovos-config` inside HA Core's actual Python
-environment (not an isolated venv) causes any dependency conflicts with HA Core's own
-packages. Worth checking directly once there's a HACS-installable custom_component skeleton
-to test against, rather than guessing further in isolation.
-
-## v1 confirmed working end-to-end on real hardware
-
-As of v0.0.3, tested against a real HA Core install (not just syntax-checked):
-- Config flow pre-fill and submission works.
-- Initial write to the shared file works.
-- A restart-persistence bug was found and fixed (see git history on
-  `custom_components/ovos/text.py`/`number.py`/`select.py` — entities were reading
-  `entry.data`, the original config-flow submission, instead of the current shared file, so
-  a restart would silently revert any later edit).
-- Rebuilt on a `DataUpdateCoordinator` (30s poll interval) after that fix, so entities also
-  pick up external edits (a person editing the file directly, or another add-on writing its
-  own section) without needing a restart or manual integration reload.
-
-### Why polling, not file watching
-
-Genuinely considered both. File watching (e.g. via `watchdog`) is more "correct" in the
-abstract — instant reaction to the actual write event — but was rejected for three concrete
-reasons specific to this data and this environment:
-
-1. **New dependency + thread-safety risk.** `watchdog`'s file-system events fire from an
-   OS-level thread outside HA's asyncio event loop; bridging that back in correctly (no
-   blocking calls, no dropped events) is a real source of subtle bugs, not just extra code.
-2. **The write pattern complicates it further.** Every add-on writes via
-   `jq > file.tmp && mv file.tmp file` (atomic rename — correct practice) — a watcher has to
-   specifically catch the *rename*, not the more obvious "modified" event on the `.tmp` file.
-3. **The data doesn't need instant reactivity.** Language/location/unit settings change a
-   handful of times a year, changed by a person or an add-on's startup — not live sensor
-   data. The entire value proposition of watching over polling is latency, and here that
-   latency genuinely doesn't matter.
-
-**Entity count doesn't favor either approach** — this was floated as a reason to prefer
-watching ("more entities are coming, e.g. skill settings") but doesn't hold up: the
-`DataUpdateCoordinator` pattern means exactly one file read per interval serves every entity
-regardless of count, present or future. Watching would scale the same way. Neither approach's
-cost scales with entity count; what matters is how the file is written and how often it
-actually changes, and neither of those changes as more entities get added.
-
-## Relationship to the other repos
-
-- [haos-ovos-addons](https://github.com/andlo/haos-ovos-addons) — the Supervisor add-ons this
-  integration reads shared config from and complements.
-- [haos-ovos-addons/ovos-skills](https://github.com/andlo/haos-ovos-addons/tree/master/ovos-skills) — the API this integration's
-  config subentries call to install/list/remove skills and read/write their settings.
+[haos-ovos-addons](https://github.com/andlo/haos-ovos-addons) — the Supervisor add-ons this integration configures. See in particular `ovos-skills`/`ovos-skills-extra` (the skill install APIs this integration's subentries call) and `ovos-persona` (the solver-configuration API).
