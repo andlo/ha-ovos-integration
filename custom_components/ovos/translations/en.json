@@ -26,7 +26,14 @@
       "step": {
         "user": {
           "title": "Add an OVOS skill",
-          "description": "Pick a skill from the official OVOS catalog to install.",
+          "description": "Choose where this skill comes from.",
+          "data": {
+            "source_type": "Source"
+          }
+        },
+        "curated": {
+          "title": "Add an OVOS skill",
+          "description": "Pick a skill from the curated catalog to install.",
           "data": {
             "skill_id": "Skill"
           }
@@ -34,6 +41,13 @@
         "confirm": {
           "title": "{name}",
           "description": "{description}"
+        },
+        "extra": {
+          "title": "Add an extra skill",
+          "description": "Type a PyPI package name or a git URL. Installed exactly as given, no verification -- see the ovos-skills-extra add-on's own DOCS.md.",
+          "data": {
+            "source": "PyPI package name or git URL"
+          }
         },
         "reconfigure_fields": {
           "title": "Skill settings",
@@ -48,7 +62,8 @@
         "settings_write_failed": "Could not save settings — check that the ovos-skills add-on is running and the Skills API URL is correct.",
         "no_settings_available": "This skill doesn't have any settings that can be edited here yet. That usually means it hasn't loaded and saved its own settings file yet -- try again in a minute, or after restarting the ovos-skills add-on.",
         "install_timed_out": "The install is taking longer than expected (over 3 minutes). It may still finish in the background — check the ovos-skills add-on's log, then try adding this skill again.",
-        "install_failed": "The install failed: {error}"
+        "install_failed": "The install failed: {error}",
+        "no_extra_api_url": "Set the \"Skills Extra API URL\" text field (under the OpenVoiceOS integration's own entities) to your ovos-skills-extra add-on's address first, e.g. http://<hostname>:8502."
       }
     },
     "autoconfigure": {

@@ -66,7 +66,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigSubentryFlow, SubentryFlowResult
 from homeassistant.helpers import selector
 
-from .const import DOMAIN, CONF_SKILLS_API_URL
+from .const import DOMAIN, CONF_SKILLS_API_URL, CONF_SKILLS_EXTRA_API_URL
 from .shared_config import read_shared_config
 
 REQUEST_TIMEOUT = 10  # catalog fetch / kicking off install — not waiting
@@ -83,6 +83,21 @@ SENSITIVE_NAME_HINTS = ("key", "token", "secret", "password")
 
 def _get_skills_api_url() -> str | None:
     return read_shared_config().get(CONF_SKILLS_API_URL) or None
+
+
+def _get_skills_extra_api_url() -> str | None:
+    return read_shared_config().get(CONF_SKILLS_EXTRA_API_URL) or None
+
+
+def _api_url_for_source_type(source_type: str) -> str | None:
+    """Which add-on's API a given installed skill's subentry belongs to
+    -- stored per-subentry as "source_type" (see async_step_confirm/
+    async_step_extra) so reconfigure/settings calls reach the add-on
+    that actually installed it, curated or extra, without guessing.
+    """
+    if source_type == "extra":
+        return _get_skills_extra_api_url()
+    return _get_skills_api_url()
 
 
 def _infer_fields_from_settings(current: dict) -> list[dict]:
@@ -110,9 +125,38 @@ def _infer_fields_from_settings(current: dict) -> list[dict]:
 
 
 class SkillSubentryFlowHandler(ConfigSubentryFlow):
-    """Handle subentry flow for adding an OVOS skill."""
+    """Handle subentry flow for adding an OVOS skill.
+
+    Two sources, chosen as the very first step -- not two separate
+    "Add skill" menu entries. A two-entry split ("Skill" / "Skill
+    (Extra)") was considered and rejected the same way persona/voice
+    subentries already reject similar splits elsewhere in this
+    integration: HA gives every registered subentry type its own
+    visible "Add [type]" menu entry, and two near-identical labels for
+    what's really one decision (which source?) is worse than asking
+    that decision explicitly inside a single flow. Matches
+    ovos-skills-extra's own DOCS.md, which already describes this as
+    "choose Extra instead of the curated catalog" -- this flow is what
+    makes that real.
+    """
 
     async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        if user_input is not None:
+            if user_input["source_type"] == "extra":
+                return await self.async_step_extra()
+            return await self.async_step_curated()
+
+        schema = vol.Schema({
+            vol.Required("source_type", default="curated"): vol.In({
+                "curated": "Curated catalog (verified to work here)",
+                "extra": "Extra (any PyPI package or git URL, unverified)",
+            })
+        })
+        return self.async_show_form(step_id="user", data_schema=schema)
+
+    async def async_step_curated(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
         api_url = await self.hass.async_add_executor_job(_get_skills_api_url)
@@ -142,7 +186,51 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
         schema = vol.Schema(
             {vol.Required("skill_id"): vol.In({sid: item["name"] for sid, item in options})}
         )
-        return self.async_show_form(step_id="user", data_schema=schema)
+        return self.async_show_form(step_id="curated", data_schema=schema)
+
+    async def async_step_extra(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """No catalog, no description, no confirm step -- just install
+        whatever was typed, exactly as given (see ovos-skills-extra's
+        own DOCS.md: "no PyPI-vs-git preference logic ... installed
+        exactly as given"). Uses ovos-skills-extra's own API URL, a
+        genuinely separate add-on/setting from the curated one.
+        """
+        api_url = await self.hass.async_add_executor_job(_get_skills_extra_api_url)
+        if not api_url:
+            return self.async_abort(reason="no_extra_api_url")
+
+        if user_input is not None:
+            source = user_input["source"].strip()
+
+            ok = await self.hass.async_add_executor_job(self._start_install, api_url, source)
+            if not ok:
+                return self.async_abort(reason="install_request_failed")
+
+            result = await self._wait_for_install(api_url, source)
+            if result is None:
+                return self.async_abort(reason="install_timed_out")
+            if result.get("status") != "complete":
+                return self.async_abort(
+                    reason="install_failed",
+                    description_placeholders={"error": result.get("error", "unknown error")},
+                )
+
+            real_skill_id = result["skill_id"]
+            return self.async_create_entry(
+                title=real_skill_id,  # no catalog "name" to show for an extra install
+                data={
+                    "skill_id": real_skill_id,
+                    "source": source,
+                    "package_name": "",
+                    "source_type": "extra",
+                },
+                unique_id=real_skill_id,
+            )
+
+        schema = vol.Schema({vol.Required("source"): str})
+        return self.async_show_form(step_id="extra", data_schema=schema)
 
     async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
@@ -202,6 +290,7 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
                     "skill_id": real_skill_id,
                     "source": skill["source"],
                     "package_name": skill.get("package_name", ""),
+                    "source_type": "curated",
                 },
                 unique_id=real_skill_id,
             )
@@ -271,7 +360,13 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
         subentry = self._get_reconfigure_subentry()
-        api_url = await self.hass.async_add_executor_job(_get_skills_api_url)
+        # "curated" default -- subentries created before source_type
+        # existed were always curated-catalog installs (extra didn't
+        # exist as an install path yet).
+        source_type = subentry.data.get("source_type", "curated")
+        api_url = await self.hass.async_add_executor_job(
+            _api_url_for_source_type, source_type
+        )
         if not api_url:
             return self.async_abort(reason="no_api_url")
 
