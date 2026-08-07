@@ -15,6 +15,7 @@ place as HA's own built-in agent or Ollama.
 """
 from __future__ import annotations
 
+import logging
 from typing import Literal
 
 import requests
@@ -24,17 +25,28 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import intent
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_CORE_API_URL
+from .const import CONF_CORE_API_URL, CONF_LANG
 from .shared_config import read_shared_config
 
-REQUEST_TIMEOUT = 25  # ovos-core's own /ask waits up to 20s for a skill
-                       # to answer before giving up -- this needs to be
-                       # a little longer than that, not shorter, or we'd
-                       # cut it off before ovos-core's own timeout fires
+REQUEST_TIMEOUT = 40  # ovos-core's own /ask (ASK_TIMEOUT) waits up to 35s
+                       # for a skill to answer before giving up -- this
+                       # needs to be a little longer than that, not
+                       # shorter, or we'd cut it off before ovos-core's
+                       # own timeout fires. (Corrected from 25s/"up to
+                       # 20s" -- both stale relative to ovos-core's real,
+                       # confirmed ASK_TIMEOUT = 35; see ovos-core/DOCS.md.)
+
+DEFAULT_LANG = "en-us"
+
+LOG = logging.getLogger(__name__)
 
 
 def _get_core_api_url() -> str | None:
     return read_shared_config().get(CONF_CORE_API_URL) or None
+
+
+def _get_lang_fallback() -> str:
+    return read_shared_config().get(CONF_LANG) or DEFAULT_LANG
 
 
 async def async_setup_entry(
@@ -81,8 +93,22 @@ class OvosConversationAgent(conversation.ConversationEntity):
                 response=response, conversation_id=user_input.conversation_id
             )
 
+        # user_input.language can genuinely be falsy -- confirmed on real
+        # hardware: calling conversation.process without an explicit
+        # language produced None here, which ovos-core's /ask (a
+        # Pydantic model requiring `lang: str`) rejects with an
+        # immediate 422 -- previously silently swallowed below and
+        # reported as "Sorry, I don't understand that.", indistinguishable
+        # from a genuine no-skill-matched case. Falls back to the shared
+        # config's own configured lang (the same value ovos-core itself
+        # uses), then a hardcoded default, rather than forwarding
+        # whatever HA gives us unchecked.
+        lang = user_input.language or await self.hass.async_add_executor_job(
+            _get_lang_fallback
+        )
+
         answer = await self.hass.async_add_executor_job(
-            self._ask, api_url, user_input.text, user_input.language
+            self._ask, api_url, user_input.text, lang
         )
 
         if answer is None:
@@ -105,8 +131,21 @@ class OvosConversationAgent(conversation.ConversationEntity):
                 json={"utterance": utterance, "lang": lang},
                 timeout=REQUEST_TIMEOUT,
             )
-        except requests.RequestException:
+        except requests.RequestException as err:
+            # Previously swallowed with no logging at all -- confirmed on
+            # real hardware this made a real bug (see the lang-fallback
+            # comment above) indistinguishable from a genuine "nothing
+            # matched" case, from HA's own logs, with no error entry
+            # anywhere to find. Always log at debug (not warning/error):
+            # ovos-core being briefly unreachable or slow to answer isn't
+            # exceptional for every deployment (e.g. right after boot,
+            # see ovos-core/DOCS.md's first-boot startup time), but it
+            # should be visible when someone goes looking.
+            LOG.debug("Request to %s/ask failed: %s", api_url, err)
             return None
         if resp.status_code != 200:
+            LOG.debug(
+                "%s/ask returned %s: %s", api_url, resp.status_code, resp.text
+            )
             return None
         return resp.json().get("utterance")
