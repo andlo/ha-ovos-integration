@@ -2,9 +2,9 @@
 
 <img src="logo.png" width="96" height="96" alt="OpenVoiceOS logo">
 
-A Home Assistant **integration** (HACS-distributed `custom_component`, not a Supervisor add-on) for configuring [OpenVoiceOS](https://openvoiceos.org) the way HAOS users already configure everything else: as entities and config flows under Settings → Devices & services, not raw JSON files or a bespoke webpage.
+**This is the companion Home Assistant integration for [haos-ovos-addons](https://github.com/andlo/haos-ovos-addons).** It has no purpose on its own — every entity and flow it offers talks directly to that repo's own add-ons over their own HTTP APIs (`ovos-core`, `ovos-skills`, `ovos-skills-extra`, `ovos-persona`). It is **not** a general-purpose OVOS integration: it won't do anything useful against a different OVOS install (`ovos-installer`, `raspOVOS`, a manual venv install, etc.), since those don't expose the same bespoke APIs this integration was built against. Install [haos-ovos-addons](https://github.com/andlo/haos-ovos-addons) first — this repo only makes sense alongside it.
 
-Talks to the add-ons in [haos-ovos-addons](https://github.com/andlo/haos-ovos-addons) — install those first.
+A Home Assistant **integration** (HACS-distributed `custom_component`, not a Supervisor add-on) for configuring those add-ons the way HAOS users already configure everything else: as entities and config flows under Settings → Devices & services, not raw JSON files or a bespoke webpage.
 
 ## What it does
 
