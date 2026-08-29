@@ -65,6 +65,27 @@ def infer_fields_from_settings(current: dict) -> list[dict]:
     return fields
 
 
+def fetch_catalog_names(api_url: str) -> dict[str, str]:
+    """skill_id -> catalog display name, from ovos-skills' own curated
+    /catalog (see skill_subentry.py's _fetch_catalog). ovos-skills-extra
+    has no catalog by design (its own DOCS.md: "no catalog, install by
+    typing a PyPI name or git URL directly") -- a 404/anything else here
+    just means no names for that add-on's skills, not an error to
+    surface.
+    """
+    try:
+        resp = requests.get(f"{api_url}/catalog", timeout=REQUEST_TIMEOUT)
+        if resp.status_code != 200:
+            return {}
+        return {
+            item["skill_id"]: item["name"]
+            for item in resp.json().get("items", [])
+            if item.get("skill_id") and item.get("name")
+        }
+    except requests.RequestException:
+        return {}
+
+
 def list_installed_skills(api_url: str) -> list[dict]:
     """All skills the given add-on (ovos-skills or ovos-skills-extra)
     currently reports as installed -- {"skill_id", "package_name",
@@ -115,6 +136,20 @@ def write_settings(api_url: str, skill_id: str, settings: dict) -> bool:
         return resp.status_code == 200
     except requests.RequestException:
         return False
+
+
+def prettify_skill_id(skill_id: str) -> str:
+    """Last-resort display name when no catalog entry and no subentry
+    title exist for a skill (always true for ovos-skills-extra
+    installs, and for anything installed directly against an add-on's
+    API rather than through this integration's own flows). Strips the
+    ".openvoiceos"/".<author>" suffix OVOS skill_ids conventionally
+    carry and title-cases the rest -- not guaranteed pretty, just
+    better than the raw identifier.
+    """
+    base = skill_id.split(".", 1)[0]
+    base = base[len("ovos-skill-"):] if base.startswith("ovos-skill-") else base
+    return base.replace("-", " ").replace("_", " ").title() or skill_id
 
 
 def resolve_fields(api_url: str, skill_id: str, package_name: str) -> tuple[list[dict], dict]:
