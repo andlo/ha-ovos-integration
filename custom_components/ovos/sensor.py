@@ -43,6 +43,8 @@ core PR #128157, "Add config subentry support to device registry").
 """
 from __future__ import annotations
 
+import logging
+
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -59,6 +61,8 @@ from .skill_settings import (
     fetch_catalog_names,
     prettify_skill_id,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 # Stable identifiers for the two possible hub devices -- not user data,
 # safe as literal identifier strings.
