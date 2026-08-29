@@ -18,9 +18,10 @@ from .const import (
 )
 from .coordinator import OvosSharedConfigCoordinator
 from .shared_config import write_shared_config_key
+from .skill_settings_coordinator import OvosSkillSettingsCoordinator
 from .supervisor_discovery import async_discover_addon_api_urls
 
-PLATFORMS = ["text", "number", "select", "sensor", "conversation"]
+PLATFORMS = ["text", "number", "select", "sensor", "switch", "conversation"]
 
 
 def _seed_missing_keys(current: dict, entry: ConfigEntry) -> bool:
@@ -85,6 +86,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
+    # Separate coordinator for per-skill settings (issue #3) -- polls
+    # each installed skill's own add-on API, not the shared mycroft.conf,
+    # so it's stored under its own key rather than overloading the
+    # existing entry.entry_id one every other platform already assumes
+    # is the shared-config coordinator.
+    skill_settings_coordinator = OvosSkillSettingsCoordinator(hass, entry)
+    await skill_settings_coordinator.async_config_entry_first_refresh()
+    hass.data[DOMAIN][f"{entry.entry_id}_skill_settings"] = skill_settings_coordinator
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
@@ -93,4 +103,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id, None)
+        hass.data[DOMAIN].pop(f"{entry.entry_id}_skill_settings", None)
     return unloaded

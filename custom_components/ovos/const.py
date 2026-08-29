@@ -44,3 +44,16 @@ CONF_PERSONA_API_URL = "ha_ovos_persona_api_url"
 # reasoning as the other three -- ovos-skills-extra is entirely
 # optional, a person may run only the curated ovos-skills, or neither.
 CONF_SKILLS_EXTRA_API_URL = "ha_ovos_skills_extra_api_url"
+
+# Optional base URL for a self-hosted ovos-skill-config-tool instance
+# (https://github.com/OscillateLabsLLC/ovos-skill-config-tool) -- a
+# separate, third-party, generic settings.json editor with no type
+# restrictions (handles nested objects/arrays, which this integration's
+# own live settings entities deliberately don't attempt to represent).
+# Not one of this project's own add-ons and not auto-discovered via
+# Supervisor for that reason -- a person who chooses to self-host it
+# points this at wherever they run it. Purely additive: used only to
+# set each skill device's own `configuration_url` (see sensor.py) as an
+# escape hatch for settings this integration's own entities can't
+# cover, never a replacement for them.
+CONF_SKILL_CONFIG_TOOL_URL = "ha_ovos_skill_config_tool_url"

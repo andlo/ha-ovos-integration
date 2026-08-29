@@ -15,7 +15,9 @@ Adds one integration entry, **"OpenVoiceOS"**, with:
 - **Skill management** — one config subentry per installed skill:
   - *Add a skill* from `ovos-skills`' curated catalog (a picklist), or from `ovos-skills-extra` (type a PyPI name or git URL directly).
   - Each skill gets its own device in HA's device registry, with a live "installed version" sensor.
-  - *Reconfigure a skill's settings* from its own `settingsmeta.json`, or inferred directly from its `settings.json` when it doesn't ship one.
+  - Non-sensitive settings (booleans, numbers, plain strings) show up as live, editable entities on that same device — no separate flow needed to see or change them.
+  - *Reconfigure a skill's other settings* from its own `settingsmeta.json`, or inferred directly from its `settings.json` when it doesn't ship one — still the way to change anything not shown as a live entity.
+  - An optional link to a self-hosted [ovos-skill-config-tool](https://github.com/OscillateLabsLLC/ovos-skill-config-tool) instance, for editing secrets or nested settings this integration deliberately keeps off its own live entities.
 - **Persona configuration** — a subentry flow to choose which question-solver plugins `ovos-persona` uses, and in what order.
 
 ## Setup

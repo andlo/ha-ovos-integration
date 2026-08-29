@@ -68,6 +68,14 @@ from homeassistant.helpers import selector
 
 from .const import DOMAIN, CONF_SKILLS_API_URL, CONF_SKILLS_EXTRA_API_URL
 from .shared_config import read_shared_config
+from .skill_settings import (
+    get_skills_api_url as _get_skills_api_url,
+    get_skills_extra_api_url as _get_skills_extra_api_url,
+    api_url_for_source_type as _api_url_for_source_type,
+    resolve_fields,
+    write_settings as _write_settings,
+    fetch_current_settings as _fetch_current_settings,
+)
 
 REQUEST_TIMEOUT = 10  # catalog fetch / kicking off install — not waiting
                        # for pip itself, which the add-on's own API already
@@ -77,51 +85,6 @@ REQUEST_TIMEOUT = 10  # catalog fetch / kicking off install — not waiting
 # on real hardware (confirmed this session) -- generous but bounded.
 INSTALL_POLL_TIMEOUT = 180
 INSTALL_POLL_INTERVAL = 3
-
-SENSITIVE_NAME_HINTS = ("key", "token", "secret", "password")
-
-
-def _get_skills_api_url() -> str | None:
-    return read_shared_config().get(CONF_SKILLS_API_URL) or None
-
-
-def _get_skills_extra_api_url() -> str | None:
-    return read_shared_config().get(CONF_SKILLS_EXTRA_API_URL) or None
-
-
-def _api_url_for_source_type(source_type: str) -> str | None:
-    """Which add-on's API a given installed skill's subentry belongs to
-    -- stored per-subentry as "source_type" (see async_step_confirm/
-    async_step_extra) so reconfigure/settings calls reach the add-on
-    that actually installed it, curated or extra, without guessing.
-    """
-    if source_type == "extra":
-        return _get_skills_extra_api_url()
-    return _get_skills_api_url()
-
-
-def _infer_fields_from_settings(current: dict) -> list[dict]:
-    """Build a settingsmeta-shaped field list directly from settings.json's
-    own values, for skills that have no usable settingsmeta.json (see
-    module docstring). Only top-level primitives are considered safely
-    inferable; nested dicts/lists are skipped rather than guessed at,
-    and "__"-prefixed keys are OVOS's own internal bookkeeping (e.g.
-    "__mycroft_skill_firstrun"), not something a person should edit.
-    """
-    fields = []
-    for name, value in current.items():
-        if name.startswith("__") or isinstance(value, (dict, list)):
-            continue
-        if isinstance(value, bool):
-            ftype = "checkbox"
-        elif isinstance(value, (int, float)):
-            ftype = "number"
-        elif any(hint in name.lower() for hint in SENSITIVE_NAME_HINTS):
-            ftype = "password"
-        else:
-            ftype = "text"
-        fields.append({"name": name, "type": ftype, "value": value})
-    return fields
 
 
 class SkillSubentryFlowHandler(ConfigSubentryFlow):
@@ -372,27 +335,9 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
 
         skill_id = subentry.data["skill_id"]
         package_name = subentry.data.get("package_name", "")
-        meta = await self.hass.async_add_executor_job(
-            self._fetch_settingsmeta, api_url, skill_id, package_name
+        fields, current = await self.hass.async_add_executor_job(
+            resolve_fields, api_url, skill_id, package_name
         )
-
-        mappable = bool(
-            meta and meta.get("has_settingsmeta") and meta["fields"]
-            and all(f.get("type") == "checkbox" for f in meta["fields"])
-        )
-
-        current = await self.hass.async_add_executor_job(
-            self._fetch_current_settings, api_url, skill_id
-        )
-
-        if mappable:
-            fields = meta["fields"]
-        else:
-            # No settingsmeta, or one with field types not yet confirmed
-            # mappable — fall back to settings.json's own shape (see
-            # module docstring). If the skill has never loaded, this is
-            # legitimately empty; nothing to build a form from either way.
-            fields = _infer_fields_from_settings(current)
 
         if not fields:
             return self.async_abort(reason="no_settings_available")
@@ -418,7 +363,7 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
             # dropped by a naive overwrite.
             merged = {**current, **user_input}
             ok = await self.hass.async_add_executor_job(
-                self._write_settings, api_url, skill_id, merged
+                _write_settings, api_url, skill_id, merged
             )
             if not ok:
                 return self.async_abort(reason="settings_write_failed")
@@ -454,38 +399,3 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
         return self.async_show_form(
             step_id="reconfigure_fields", data_schema=vol.Schema(schema_dict)
         )
-
-    @staticmethod
-    def _fetch_settingsmeta(api_url: str, skill_id: str, package_name: str) -> dict | None:
-        try:
-            resp = requests.get(
-                f"{api_url}/skills/{skill_id}/settingsmeta",
-                params={"package_name": package_name},
-                timeout=REQUEST_TIMEOUT,
-            )
-            if resp.status_code != 200:
-                return None
-            return resp.json()
-        except requests.RequestException:
-            return None
-
-    @staticmethod
-    def _fetch_current_settings(api_url: str, skill_id: str) -> dict:
-        try:
-            resp = requests.get(f"{api_url}/skills/{skill_id}/settings", timeout=REQUEST_TIMEOUT)
-            resp.raise_for_status()
-            return resp.json()
-        except requests.RequestException:
-            return {}
-
-    @staticmethod
-    def _write_settings(api_url: str, skill_id: str, settings: dict) -> bool:
-        try:
-            resp = requests.put(
-                f"{api_url}/skills/{skill_id}/settings",
-                json=settings,
-                timeout=REQUEST_TIMEOUT,
-            )
-            return resp.status_code == 200
-        except requests.RequestException:
-            return False

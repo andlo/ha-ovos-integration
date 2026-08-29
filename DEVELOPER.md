@@ -30,6 +30,20 @@ Deliberately best-effort and additive only: no token present (a non-Supervisor i
 
 **The confirmed-real `skill_id`, not the catalog's guess, is what a subentry gets created with.** The install flow polls the add-on's own job status and waits for the real result — the catalog's own `skill_id` field doesn't reliably match what a skill actually registers as at runtime, and creating a subentry with the wrong one silently broke settings lookups for every skill installed that way.
 
+## Skill settings: live entities, not only a one-off reconfigure flow
+
+See [issue #3](https://github.com/andlo/ha-ovos-integration/issues/3). `skill_settings.py` holds the shared field-inference logic (settingsmeta.json when present and exclusively checkbox fields, otherwise inferred from `settings.json`'s own value types) used by BOTH `skill_subentry.py`'s original one-off reconfigure flow and the new live entities below — one decision, not two copies that could drift.
+
+`skill_settings_coordinator.py` polls every installed skill's own current settings on a 30s interval (separate from `OvosSharedConfigCoordinator`, which only ever reads the shared `mycroft.conf` — stored under its own `hass.data` key, `f"{entry.entry_id}_skill_settings"`, since every other platform already assumes `hass.data[DOMAIN][entry.entry_id]` IS the shared-config coordinator directly). `switch.py`/`number.py`/`text.py` each add one live entity per matching field, attached to the SAME device `sensor.py` already creates for that skill (by `DeviceInfo(identifiers=...)` alone, not a second device) — so a skill's version, its settings, and (see below) a link to advanced editing all live on one device page.
+
+**Booleans, numbers, and plain strings only — never anything `skill_settings.SENSITIVE_NAME_HINTS` flags (name containing key/token/secret/password), and never nested objects/arrays.** The sensitive-field exclusion is a real security boundary, not a UX preference: an HA entity's state persists in history and is queryable via the API/logbook indefinitely, unlike a form value you type once and never see rendered back — turning a secret into standing, always-visible state would be a real ongoing exposure. Those fields, and anything with nested structure, stay reachable only through `skill_subentry.py`'s own reconfigure flow (which never creates persistent entities) or an external tool (see below).
+
+## Escape hatch: optional link to a self-hosted ovos-skill-config-tool
+
+[ovos-skill-config-tool](https://github.com/OscillateLabsLLC/ovos-skill-config-tool) is a separate, third-party project — a generic `settings.json` editor with no type restrictions (handles nested objects/arrays, edits secrets in place) that this integration deliberately doesn't try to replicate; see the module docstrings above for why going further natively isn't the right call. `CONF_SKILL_CONFIG_TOOL_URL` is an optional text entity for wherever a person chooses to self-host it — not one of this project's own add-ons, and not auto-discovered via Supervisor for that reason (contrast `supervisor_discovery.py`, which only ever looks for `haos-ovos-addons`' own add-ons).
+
+When set, it becomes each skill device's own `configuration_url` (see `sensor.py`) — HA's own native mechanism for "a device has more settings outside this integration," rendered as a plain "Visit" link on that device's page. Deliberately not a custom button entity for the same purpose: `configuration_url` already does this, and using it means one less thing to build and maintain.
+
 ## Relationship to the other repo
 
 [haos-ovos-addons](https://github.com/andlo/haos-ovos-addons) — the Supervisor add-ons this integration configures. See in particular `ovos-skills`/`ovos-skills-extra` (the skill install APIs this integration's subentries call) and `ovos-persona` (the solver-configuration API).

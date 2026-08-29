@@ -26,7 +26,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 
-from .const import DOMAIN, CONF_SKILLS_API_URL
+from .const import DOMAIN, CONF_SKILLS_API_URL, CONF_SKILL_CONFIG_TOOL_URL
 from .shared_config import read_shared_config
 
 REQUEST_TIMEOUT = 10
@@ -60,6 +60,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
         await hass.async_add_executor_job(_fetch_installed_versions, api_url)
         if api_url else {}
     )
+    config_tool_url = await hass.async_add_executor_job(
+        lambda: read_shared_config().get(CONF_SKILL_CONFIG_TOOL_URL) or None
+    )
 
     for subentry_id, subentry in entry.subentries.items():
         if subentry.subentry_type != "skill":
@@ -68,7 +71,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
         add_entities(
             [
                 OvosSkillVersionSensor(
-                    subentry_id, skill_id, subentry.title, versions.get(skill_id)
+                    subentry_id, skill_id, subentry.title, versions.get(skill_id),
+                    config_tool_url,
                 )
             ],
             config_subentry_id=subentry_id,
@@ -87,14 +91,26 @@ class OvosSkillVersionSensor(SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
-        self, subentry_id: str, skill_id: str, name: str, version: str | None
+        self,
+        subentry_id: str,
+        skill_id: str,
+        name: str,
+        version: str | None,
+        config_tool_url: str | None = None,
     ) -> None:
         self._attr_unique_id = f"{subentry_id}_version"
         self._attr_native_value = version or "unknown"
+        # configuration_url, when set, renders as a native "Visit" link
+        # on this device's own page -- HA's own escape-hatch mechanism
+        # for "more settings live outside this integration", used here
+        # to point at a self-hosted ovos-skill-config-tool instance
+        # (see const.py's CONF_SKILL_CONFIG_TOOL_URL) rather than
+        # building a bespoke button entity for the same purpose.
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, skill_id)},
             name=name,
             manufacturer="OpenVoiceOS",
             model=skill_id,
             sw_version=version,
+            configuration_url=config_tool_url,
         )
