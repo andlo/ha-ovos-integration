@@ -18,21 +18,19 @@ skills only -- ovos-skills-extra has no catalog by design), otherwise
 skill_settings.prettify_skill_id's best-effort cleanup of the raw
 skill_id.
 
-Grouping by source add-on: since Home Assistant has no supported way to
-create a config subentry outside of a subentry flow (confirmed via
-community.home-assistant.io's own "Are there methods like
-async_setup_entry for a Config Subentry?" thread -- no lifecycle hooks,
-no documented programmatic creation), the subentry-based header
-grouping seen for skills added through this integration's own flow
-isn't reproducible for skills discovered this way. Per that same
-thread's own suggestion ("Using devices... seem to be able to do the
-same role of having multiple children for a given config entry"), each
-skill device instead sets `via_device` to a small, entity-less "hub"
-device for whichever add-on it came from -- shows as "Connected via
-device" on the skill's own page and nests it under that hub on the
-Devices list, the closest supported equivalent. A hub is only ever
-created for an add-on that's actually configured (has an API URL) AND
-has at least one skill installed -- never an empty or unreachable one.
+Grouping by source add-on: a skill WITHOUT a real subentry (should be
+rare in practice now that __init__.py's
+_async_create_missing_skill_subentries auto-creates one for every
+discovered skill, but a fallback for anything that reaches this before
+that runs, or if creation ever fails for one) sets `via_device` to a
+small, entity-less "hub" device for whichever add-on it came from --
+shows as "Connected via device" on the skill's own page and nests it
+under that hub on the Devices list. A hub is only ever created for an
+add-on that has at least one skill actually needing this fallback right
+now, and is removed again once nothing does (see
+`_cleanup_orphaned_hubs` -- confirmed needed in practice: a hub created
+while a skill still lacked a subentry became a permanent orphan device
+once that skill got one on a later boot and stopped referencing it).
 
 ovos-core is NOT one of the hubs here: it has no /skills-equivalent
 endpoint to enumerate its own plugin skills (e.g. ovos-skill-boot-
@@ -127,29 +125,65 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
         if subentry.subentry_type == "skill"
     }
 
-    # A hub is created the first time a skill from that source_type is
-    # seen -- never upfront/unconditionally, so a configured-but-empty
-    # or unconfigured add-on never gets a hub device with nothing under it.
+    # A hub is created the first time it's actually needed -- i.e. the
+    # first skill from that source_type that has NO subentry (see
+    # below). Never upfront/unconditionally, so a configured-but-empty
+    # add-on, or one where every skill already has a real subentry
+    # (the now-common case since __init__.py's
+    # _async_create_missing_skill_subentries runs before this),
+    # doesn't get an orphaned hub device with nothing under it.
     hub_via_device: dict[str, tuple] = {}
 
     for skill_id, skill in installed.items():
         subentry_id, subentry_title = subentry_by_skill.get(skill_id, (None, None))
         name = subentry_title or catalog_names.get(skill_id) or prettify_skill_id(skill_id)
 
-        source_type = skill["source_type"]
-        if source_type not in hub_via_device:
-            hub_via_device[source_type] = _ensure_hub_device(hass, entry, source_type)
+        # via_device (the hub fallback) is ONLY relevant when this skill
+        # has no subentry at all -- a skill WITH one is already properly
+        # grouped by that subentry, and giving it a via_device too would
+        # be pointless (and, worse, leaves a stray hub device behind
+        # with nothing genuinely needing it once every skill gets a
+        # subentry, confirmed happening in practice this session).
+        via_device = None
+        if not subentry_id:
+            source_type = skill["source_type"]
+            if source_type not in hub_via_device:
+                hub_via_device[source_type] = _ensure_hub_device(hass, entry, source_type)
+            via_device = hub_via_device[source_type]
 
         entities = [
             OvosSkillVersionSensor(
                 subentry_id or skill_id, skill_id, name, skill.get("version"),
-                config_tool_url, hub_via_device[source_type],
+                config_tool_url, via_device,
             )
         ]
         if subentry_id:
             add_entities(entities, config_subentry_id=subentry_id)
         else:
             add_entities(entities)
+
+    _cleanup_orphaned_hubs(hass, entry, still_used=set(hub_via_device))
+
+
+def _cleanup_orphaned_hubs(hass: HomeAssistant, entry: ConfigEntry, still_used: set[str]) -> None:
+    """Removes a hub device left over from before every one of its
+    skills got a real subentry (see __init__.py's
+    _async_create_missing_skill_subentries) -- confirmed happening in
+    practice this session: a hub created on an earlier boot, when a
+    skill still needed the via_device fallback, becomes a permanent
+    orphan under "devices not belonging to a subentry" once that skill
+    gets a subentry on a later boot and stops referencing it. Only
+    removes a hub whose source_type ISN'T in `still_used` (this boot's
+    own set of source_types that genuinely still needed the fallback),
+    never one currently in active use.
+    """
+    device_registry = dr.async_get(hass)
+    for source_type, identifier in (("curated", HUB_SKILLS), ("extra", HUB_SKILLS_EXTRA)):
+        if source_type in still_used:
+            continue
+        device = device_registry.async_get_device(identifiers={(DOMAIN, identifier)})
+        if device is not None:
+            device_registry.async_remove_device(device.id)
 
 
 class OvosSkillVersionSensor(SensorEntity):
