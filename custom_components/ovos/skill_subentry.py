@@ -106,6 +106,31 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
+        # Auto-import path (see __init__.py's
+        # _async_create_missing_skill_subentries): confirmed by testing
+        # directly against this HA version's own config_entries.py that
+        # ConfigSubentryFlow.async_create_entry hard-requires
+        # self.source == SOURCE_USER ("user") -- any other context
+        # source (e.g. the SOURCE_IMPORT-style approach regular config
+        # flows support) raises ValueError before the entry is even
+        # created. Subentries have no equivalent "created without a
+        # person, please don't validate against SOURCE_USER" path, so
+        # this has to go through async_step_user regardless -- detected
+        # by payload shape ("skill_id" only ever appears in the fully
+        # pre-resolved auto-import dict, never in the interactive
+        # source_type dropdown below) rather than a different init_step.
+        if user_input is not None and "skill_id" in user_input:
+            return self.async_create_entry(
+                title=user_input["title"],
+                data={
+                    "skill_id": user_input["skill_id"],
+                    "source": user_input.get("source", ""),
+                    "package_name": user_input.get("package_name", ""),
+                    "source_type": user_input["source_type"],
+                },
+                unique_id=user_input["skill_id"],
+            )
+
         if user_input is not None:
             if user_input["source_type"] == "extra":
                 return await self.async_step_extra()
@@ -118,43 +143,6 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
             })
         })
         return self.async_show_form(step_id="user", data_schema=schema)
-
-    async def async_step_import(
-        self, user_input: dict[str, Any]
-    ) -> SubentryFlowResult:
-        """Create a subentry directly, no form -- the same pattern HA's
-        own auto-discovery flows use (SOURCE_IMPORT) for "found this
-        automatically, nothing to ask the person about" entries.
-
-        Triggered from __init__.py's async_setup_entry for any skill the
-        skill settings coordinator finds installed (via each add-on's
-        own /skills list) that doesn't already have a subentry --
-        skills installed directly against ovos-skills'/ovos-skills-
-        extra's own API, outside this flow entirely, previously never
-        got a subentry and so never got the same header-grouped
-        placement other integrations' devices get on this integration's
-        own page (see sensor.py's hub-device fallback, which stays in
-        place as a safety net for anything that reaches here before this
-        runs, or if it's ever skipped).
-
-        user_input here is NOT something a person typed -- it's the
-        full pre-resolved dict __init__.py already built (skill_id,
-        source, package_name, source_type, title), so this always goes
-        straight to async_create_entry with no async_show_form step at
-        all, matching the shape a real user-driven install ends with
-        (see async_step_curated/async_step_extra's own final
-        async_create_entry calls).
-        """
-        return self.async_create_entry(
-            title=user_input["title"],
-            data={
-                "skill_id": user_input["skill_id"],
-                "source": user_input.get("source", ""),
-                "package_name": user_input.get("package_name", ""),
-                "source_type": user_input["source_type"],
-            },
-            unique_id=user_input["skill_id"],
-        )
 
     async def async_step_curated(
         self, user_input: dict[str, Any] | None = None

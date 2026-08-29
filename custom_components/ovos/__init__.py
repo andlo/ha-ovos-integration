@@ -1,6 +1,8 @@
 """The OpenVoiceOS shared config integration."""
 from __future__ import annotations
 
+import logging
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -21,6 +23,8 @@ from .shared_config import write_shared_config_key
 from .skill_settings import fetch_catalog_names, get_skills_api_url, prettify_skill_id
 from .skill_settings_coordinator import OvosSkillSettingsCoordinator
 from .supervisor_discovery import async_discover_addon_api_urls
+
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["text", "number", "select", "sensor", "switch", "conversation"]
 
@@ -146,7 +150,7 @@ async def _async_create_missing_skill_subentries(
         try:
             await hass.config_entries.subentries.async_init(
                 (entry.entry_id, "skill"),
-                context={"source": "import"},
+                context={"source": "user"},
                 data={
                     "skill_id": skill_id,
                     "source": skill.get("source", ""),
@@ -156,6 +160,9 @@ async def _async_create_missing_skill_subentries(
                 },
             )
         except Exception:  # noqa: BLE001 -- best-effort, see docstring
+            _LOGGER.exception(
+                "Failed to auto-create a subentry for skill %s", skill_id
+            )
             continue
 
 
