@@ -38,20 +38,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
         f"{entry.entry_id}_skill_settings"
     ]
 
-    for subentry_id, subentry in entry.subentries.items():
-        if subentry.subentry_type != "skill":
-            continue
-        skill_id = subentry.data["skill_id"]
-        skill_data = coordinator.data.get(skill_id)
-        if not skill_data:
-            continue
+    # skill_id -> subentry_id, for skills that DO have one (added via
+    # "Add sub-entry -> Skill") -- optional, not a precondition. A
+    # skill installed directly against the add-on's own API still gets
+    # its entities, just without config_subentry_id (see
+    # skill_settings_coordinator.py's own docstring for why coordinator
+    # discovery doesn't depend on subentries existing at all).
+    subentry_by_skill = {
+        subentry.data["skill_id"]: subentry_id
+        for subentry_id, subentry in entry.subentries.items()
+        if subentry.subentry_type == "skill"
+    }
+
+    for skill_id, skill_data in coordinator.data.items():
         entities = [
-            OvosSkillSettingSwitch(coordinator, subentry_id, skill_id, field["name"])
+            OvosSkillSettingSwitch(
+                coordinator, subentry_by_skill.get(skill_id, skill_id), skill_id, field["name"]
+            )
             for field in skill_data["fields"]
             if field.get("type") == "checkbox"
         ]
-        if entities:
+        if not entities:
+            continue
+        subentry_id = subentry_by_skill.get(skill_id)
+        if subentry_id:
             add_entities(entities, config_subentry_id=subentry_id)
+        else:
+            add_entities(entities)
 
 
 class OvosSkillSettingSwitch(CoordinatorEntity, SwitchEntity):

@@ -1,14 +1,15 @@
 """Polls each installed skill's own current settings, keyed by skill_id
 -- backs the live per-skill settings entities (switch.py/number.py's
-and text.py's per-skill classes). Separate from OvosSharedConfigCoordinator
-(that one polls the shared mycroft.conf; this one polls each skill's
-own add-on API instead), and keyed per config entry the same way.
+and text.py's per-skill classes).
 
-Reuses skill_settings.resolve_fields (settingsmeta when present and
-exclusively checkbox fields, otherwise inferred from settings.json's
-own value types) -- the exact same decision skill_subentry.py's
-one-off reconfigure flow makes, so a setting shows up the same way
-whether read live here or through that flow.
+Discovers skills directly from each configured add-on's own /skills
+list (curated ovos-skills and ovos-skills-extra, whichever have an API
+URL configured) -- NOT from this integration's own subentries. A skill
+installed directly against an add-on's API, outside the "Add sub-entry"
+flow, still gets its settings polled and shown this way; subentries (if
+one exists for a given skill_id) are only consulted separately, by the
+platform files, to decide whether a live entity can also be scoped
+under that subentry for deletion/organization purposes.
 """
 from __future__ import annotations
 
@@ -19,7 +20,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .skill_settings import api_url_for_source_type, resolve_fields
+from .skill_settings import (
+    get_skills_api_url,
+    get_skills_extra_api_url,
+    list_installed_skills,
+    resolve_fields,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,19 +46,19 @@ class OvosSkillSettingsCoordinator(DataUpdateCoordinator[dict]):
 
     def _fetch_all(self) -> dict:
         result: dict = {}
-        for subentry in self._entry.subentries.values():
-            if subentry.subentry_type != "skill":
-                continue
-            skill_id = subentry.data["skill_id"]
-            source_type = subentry.data.get("source_type", "curated")
-            package_name = subentry.data.get("package_name", "")
-            api_url = api_url_for_source_type(source_type)
+        for api_url in (get_skills_api_url(), get_skills_extra_api_url()):
             if not api_url:
                 continue
-            fields, current = resolve_fields(api_url, skill_id, package_name)
-            result[skill_id] = {
-                "fields": fields,
-                "current": current,
-                "api_url": api_url,
-            }
+            for skill in list_installed_skills(api_url):
+                skill_id = skill.get("skill_id")
+                if not skill_id or skill_id in result:
+                    continue
+                package_name = skill.get("package_name", "")
+                fields, current = resolve_fields(api_url, skill_id, package_name)
+                result[skill_id] = {
+                    "fields": fields,
+                    "current": current,
+                    "api_url": api_url,
+                    "version": skill.get("version"),
+                }
         return result

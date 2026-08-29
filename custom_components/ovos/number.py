@@ -36,20 +36,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
     settings_coordinator: OvosSkillSettingsCoordinator = hass.data[DOMAIN][
         f"{entry.entry_id}_skill_settings"
     ]
-    for subentry_id, subentry in entry.subentries.items():
-        if subentry.subentry_type != "skill":
-            continue
-        skill_id = subentry.data["skill_id"]
-        skill_data = settings_coordinator.data.get(skill_id)
-        if not skill_data:
-            continue
+    subentry_by_skill = {
+        subentry.data["skill_id"]: subentry_id
+        for subentry_id, subentry in entry.subentries.items()
+        if subentry.subentry_type == "skill"
+    }
+    for skill_id, skill_data in settings_coordinator.data.items():
         skill_entities = [
-            OvosSkillSettingNumber(settings_coordinator, subentry_id, skill_id, field["name"])
+            OvosSkillSettingNumber(
+                settings_coordinator, subentry_by_skill.get(skill_id, skill_id),
+                skill_id, field["name"],
+            )
             for field in skill_data["fields"]
             if field.get("type") == "number"
         ]
-        if skill_entities:
+        if not skill_entities:
+            continue
+        subentry_id = subentry_by_skill.get(skill_id)
+        if subentry_id:
             add_entities(skill_entities, config_subentry_id=subentry_id)
+        else:
+            add_entities(skill_entities)
 
 
 class OvosCoordinateNumber(CoordinatorEntity, NumberEntity):

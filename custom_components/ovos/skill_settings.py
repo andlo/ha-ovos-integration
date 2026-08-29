@@ -65,6 +65,23 @@ def infer_fields_from_settings(current: dict) -> list[dict]:
     return fields
 
 
+def list_installed_skills(api_url: str) -> list[dict]:
+    """All skills the given add-on (ovos-skills or ovos-skills-extra)
+    currently reports as installed -- {"skill_id", "package_name",
+    "source", "version"} per entry. Used to discover skills' live
+    settings/devices regardless of whether a config subentry exists for
+    them (see skill_settings_coordinator.py -- a skill installed
+    directly against the add-on's own API, outside this integration's
+    "Add sub-entry" flow, still gets its settings shown this way).
+    """
+    try:
+        resp = requests.get(f"{api_url}/skills", timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        return resp.json().get("skills", [])
+    except requests.RequestException:
+        return []
+
+
 def fetch_settingsmeta(api_url: str, skill_id: str, package_name: str) -> dict | None:
     try:
         resp = requests.get(
