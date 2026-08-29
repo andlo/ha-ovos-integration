@@ -58,6 +58,14 @@ This means every discovered skill now gets the same header-grouped placement on 
 
 When set, it becomes each skill device's own `configuration_url` (see `sensor.py`) — HA's own native mechanism for "a device has more settings outside this integration," rendered as a plain "Visit" link on that device's page. Deliberately not a custom button entity for the same purpose: `configuration_url` already does this, and using it means one less thing to build and maintain.
 
+## The conversation agent: skills-only, and now multi-turn-aware
+
+`conversation.py`'s `OvosConversationAgent` forwards each utterance to `ovos-core`'s own `/ask`, deliberately with no persona fallback chained on top — see that file's own module docstring for why (stacking persona's own wait on top of `/ask`'s already made unmatched utterances noticeably slower, for a worse answer than a plain "I don't understand" in practice).
+
+Genuine multi-turn dialogs (a skill's own `get_response()`, e.g. "what time should the alarm be?") are supported, not just one-shot answers, via `/ask`'s own `expect_response` field (see `ovos-core/DOCS.md`'s "Multi-turn dialogs" for how that's detected). When set, this agent returns `continue_conversation=True` in its `ConversationResult` — a real, existing Home Assistant Assist mechanism (`continue_conversation` + `conversation_id`, see [developers.home-assistant.io/docs/intent_conversation_api](https://developers.home-assistant.io/docs/intent_conversation_api)), not something invented here. Assist itself then automatically listens again and forwards the follow-up utterance back through `async_process` with the same `conversation_id` — no session tracking needed on this integration's own side, since the follow-up is simply sent through `/ask` again like any other utterance: OVOS's own bus (not this integration) is what routes it back to the specific skill still waiting on its own `get_response()` call.
+
+Confirmed: `ConversationResult`'s own `continue_conversation` parameter is real and current (per Home Assistant's own developer docs example), and `async_process` (the method this agent already used, rather than the newer `_async_handle_message`) still supports it — HA's own docs describe that newer method as "backwards compatible" with the older one, not a breaking replacement. Not yet confirmed: a full round-trip through a real skill's own multi-turn flow end-to-end through Assist itself — blocked by this stack's own separate, already-documented intent-matching reliability issues (see `ovos-core/DOCS.md`'s "Intent pipeline"), not a flaw in this mechanism.
+
 ## Relationship to the other repo
 
 [haos-ovos-addons](https://github.com/andlo/haos-ovos-addons) — the Supervisor add-ons this integration configures. See in particular `ovos-skills`/`ovos-skills-extra` (the skill install APIs this integration's subentries call) and `ovos-persona` (the solver-configuration API).

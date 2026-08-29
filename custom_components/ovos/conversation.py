@@ -12,6 +12,20 @@ better, is a separate, later piece of work.
 
 Selectable in Settings -> Voice assistants -> Assist -> [pipeline], same
 place as HA's own built-in agent or Ollama.
+
+Supports genuine multi-turn dialogs (a skill's own get_response(), e.g.
+"what time should the alarm be?"), not just one-shot answers -- see
+_ask's own docstring for how ovos-core's /ask signals this, and Home
+Assistant's own Conversation API docs (developers.home-assistant.io/
+docs/intent_conversation_api) for confirmation that continue_conversation
++ conversation_id is a real, existing HA mechanism for exactly this,
+not something invented here. When set, Assist automatically listens
+again and forwards the follow-up utterance back through async_process
+with the SAME conversation_id -- no special session tracking needed on
+this integration's own side, since the follow-up is simply sent
+through /ask again like any other utterance: OVOS's own bus (not this
+integration) is what actually routes it back to the specific skill
+still waiting on its own get_response() call.
 """
 from __future__ import annotations
 
@@ -107,7 +121,7 @@ class OvosConversationAgent(conversation.ConversationEntity):
             _get_lang_fallback
         )
 
-        answer = await self.hass.async_add_executor_job(
+        answer, expect_response = await self.hass.async_add_executor_job(
             self._ask, api_url, user_input.text, lang
         )
 
@@ -120,11 +134,13 @@ class OvosConversationAgent(conversation.ConversationEntity):
             response.async_set_speech(answer)
 
         return conversation.ConversationResult(
-            response=response, conversation_id=user_input.conversation_id
+            response=response,
+            conversation_id=user_input.conversation_id,
+            continue_conversation=expect_response,
         )
 
     @staticmethod
-    def _ask(api_url: str, utterance: str, lang: str) -> str | None:
+    def _ask(api_url: str, utterance: str, lang: str) -> tuple[str | None, bool]:
         try:
             resp = requests.post(
                 f"{api_url}/ask",
@@ -142,10 +158,11 @@ class OvosConversationAgent(conversation.ConversationEntity):
             # see ovos-core/DOCS.md's first-boot startup time), but it
             # should be visible when someone goes looking.
             LOG.debug("Request to %s/ask failed: %s", api_url, err)
-            return None
+            return None, False
         if resp.status_code != 200:
             LOG.debug(
                 "%s/ask returned %s: %s", api_url, resp.status_code, resp.text
             )
-            return None
-        return resp.json().get("utterance")
+            return None, False
+        data = resp.json()
+        return data.get("utterance"), bool(data.get("expect_response", False))
