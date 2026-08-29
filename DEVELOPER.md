@@ -14,6 +14,14 @@ Entities (language, units, API URLs, ...) read `/share/mycroft/mycroft.conf` via
 
 The shared-config flow pre-fills from `hass.config` directly: `language`+`country` combine into OVOS's `lang` format (a suggested default, not locked — a household running OVOS in a different working language than HA's own UI is a real case); `time_zone` maps directly (IANA names match); `latitude`/`longitude` copy directly; `unit_system.length` (`"km"` vs `"mi"`) maps to `system_unit`. City/state breakdown isn't available from HA Core and is left blank rather than guessed.
 
+## Add-on API URLs: auto-discovered via Supervisor, not required by hand
+
+See `supervisor_discovery.py` and [issue #4](https://github.com/andlo/ha-ovos-integration/issues/4) — the original design required a person to manually type each add-on's Supervisor-assigned hostname into its own `text.*` entity before anything depending on it (`autoconfigure`, skill install/listing) would work, a chicken-and-egg first-run problem for anyone starting from a clean install.
+
+`__init__.py`'s `async_setup_entry` now calls `async_discover_addon_api_urls()` for whichever of the four URL keys are still empty, using the `SUPERVISOR_TOKEN` env var + a direct call to `http://supervisor/addons` (list) and `http://supervisor/addons/{slug}/info` (per-match, for the confirmed `hostname` field Supervisor already computes) — the same unofficial-but-widely-used pattern other community `custom_components` rely on for Supervisor access, not something requiring a special `manifest.json` permission (that's only for core-shipped integrations using `hassio`'s own internal Python helpers). Matching is by add-on slug suffix (`_ovos_core`, `_ovos_skills`, `_ovos_persona`, `_ovos_skills_extra`), not by display name, since the slug is the durable identifier.
+
+Deliberately best-effort and additive only: no token present (a non-Supervisor install) or an add-on simply not found both just mean that key stays empty, same as before this existed — manual entry via the text entities is always still the fallback, and this discovery step never overwrites a value someone already entered or that a previous run already discovered.
+
 ## Skill management: one config subentry per skill
 
 **Two-step add flow**, not one: a name-only dropdown first, then a confirmation step showing the selected skill's full description before install starts. A single dropdown with "Name — description" per option was confirmed, by screenshot, to wrap onto multiple lines and become hard to scan once the catalog had more than a handful of entries.

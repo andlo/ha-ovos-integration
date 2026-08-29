@@ -11,9 +11,14 @@ from .const import (
     CONF_LONGITUDE,
     CONF_TIMEZONE,
     CONF_SYSTEM_UNIT,
+    CONF_CORE_API_URL,
+    CONF_SKILLS_API_URL,
+    CONF_PERSONA_API_URL,
+    CONF_SKILLS_EXTRA_API_URL,
 )
 from .coordinator import OvosSharedConfigCoordinator
 from .shared_config import write_shared_config_key
+from .supervisor_discovery import async_discover_addon_api_urls
 
 PLATFORMS = ["text", "number", "select", "sensor", "conversation"]
 
@@ -52,6 +57,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     seeded = await hass.async_add_executor_job(
         _seed_missing_keys, coordinator.data, entry
     )
+
+    # Auto-discover add-on API URLs via Supervisor -- see
+    # supervisor_discovery.py and issue #4. Checked against
+    # coordinator.data as it stood right after the first refresh above,
+    # before any of this function's own writes -- only ever fills in a
+    # key that's genuinely still empty, never overwrites a manually
+    # entered value or something another add-on already wrote.
+    missing_url_keys = [
+        key for key in (
+            CONF_CORE_API_URL, CONF_SKILLS_API_URL,
+            CONF_PERSONA_API_URL, CONF_SKILLS_EXTRA_API_URL,
+        )
+        if not coordinator.data.get(key)
+    ]
+    if missing_url_keys:
+        discovered = await async_discover_addon_api_urls(hass)
+        for key in missing_url_keys:
+            if key in discovered:
+                await hass.async_add_executor_job(
+                    write_shared_config_key, key, discovered[key]
+                )
+                seeded = True
+
     if seeded:
         await coordinator.async_request_refresh()
 

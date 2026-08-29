@@ -22,7 +22,7 @@ Adds one integration entry, **"OpenVoiceOS"**, with:
 
 1. Install and start the relevant [haos-ovos-addons](https://github.com/andlo/haos-ovos-addons) add-ons first.
 2. Add the **OpenVoiceOS** integration in HA.
-3. Fill in each add-on's API URL under the integration's own entities (e.g. `http://<hostname>:8500` for `ovos-skills`).
+3. On Home Assistant OS / Supervised, each add-on's API URL is filled in automatically by querying Supervisor — nothing to do here. On a non-Supervisor install (or if an add-on isn't found), fill in the missing URL(s) under the integration's own entities (e.g. `http://<hostname>:8500` for `ovos-skills`).
 4. Use **Add sub-entry** on the integration to add skills, run voice setup, or configure persona.
 
 ## License
