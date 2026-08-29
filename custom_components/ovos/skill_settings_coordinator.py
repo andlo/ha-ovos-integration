@@ -46,7 +46,9 @@ class OvosSkillSettingsCoordinator(DataUpdateCoordinator[dict]):
 
     def _fetch_all(self) -> dict:
         result: dict = {}
-        for api_url in (get_skills_api_url(), get_skills_extra_api_url()):
+        for api_url, source_type in (
+            (get_skills_api_url(), "curated"), (get_skills_extra_api_url(), "extra"),
+        ):
             if not api_url:
                 continue
             for skill in list_installed_skills(api_url):
@@ -60,5 +62,8 @@ class OvosSkillSettingsCoordinator(DataUpdateCoordinator[dict]):
                     "current": current,
                     "api_url": api_url,
                     "version": skill.get("version"),
+                    "source_type": source_type,
+                    "source": skill.get("source", ""),
+                    "package_name": package_name,
                 }
         return result
