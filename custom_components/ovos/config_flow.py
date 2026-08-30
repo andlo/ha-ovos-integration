@@ -26,6 +26,7 @@ from .const import (
 from .skill_subentry import SkillSubentryFlowHandler
 from .voice_subentry import AutoconfigureSubentryFlowHandler
 from .persona_subentry import PersonaSubentryFlowHandler
+from .core_settings_subentry import CoreSettingsSubentryFlowHandler
 
 
 def _guess_lang(hass) -> str:
@@ -63,6 +64,7 @@ class OvosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "skill": SkillSubentryFlowHandler,
             "autoconfigure": AutoconfigureSubentryFlowHandler,
             "persona": PersonaSubentryFlowHandler,
+            "core_settings": CoreSettingsSubentryFlowHandler,
         }
 
     async def async_step_user(self, user_input=None):

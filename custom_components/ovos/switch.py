@@ -37,7 +37,11 @@ from .skill_settings_coordinator import OvosSkillSettingsCoordinator
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities):
     shared_coordinator: OvosSharedConfigCoordinator = hass.data[DOMAIN][entry.entry_id]
-    add_entities([OvosConfirmListeningSwitch(shared_coordinator, entry)])
+    core_settings_subentry_id = hass.data[DOMAIN][f"{entry.entry_id}_core_settings_subentry"]
+    add_entities(
+        [OvosConfirmListeningSwitch(shared_coordinator, entry)],
+        config_subentry_id=core_settings_subentry_id,
+    )
 
     coordinator: OvosSkillSettingsCoordinator = hass.data[DOMAIN][
         f"{entry.entry_id}_skill_settings"

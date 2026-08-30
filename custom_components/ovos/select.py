@@ -29,6 +29,7 @@ from .shared_config import write_shared_config_key
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities):
     coordinator: OvosSharedConfigCoordinator = hass.data[DOMAIN][entry.entry_id]
+    core_settings_subentry_id = hass.data[DOMAIN][f"{entry.entry_id}_core_settings_subentry"]
     add_entities([
         OvosSystemUnitSelect(coordinator, entry),
         OvosPreferenceSelect(
@@ -55,7 +56,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
             coordinator, entry, CONF_DATE_FORMAT, DEFAULT_DATE_FORMAT,
             DATE_FORMATS, "Date format", "mdi:calendar",
         ),
-    ])
+    ], config_subentry_id=core_settings_subentry_id)
 
 
 class OvosSystemUnitSelect(CoordinatorEntity, SelectEntity):

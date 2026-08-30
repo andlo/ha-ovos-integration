@@ -22,6 +22,7 @@ from .skill_settings_coordinator import OvosSkillSettingsCoordinator
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities):
     coordinator: OvosSharedConfigCoordinator = hass.data[DOMAIN][entry.entry_id]
+    core_settings_subentry_id = hass.data[DOMAIN][f"{entry.entry_id}_core_settings_subentry"]
     add_entities([
         OvosLanguageText(coordinator, entry),
         OvosSkillsApiUrlText(coordinator, entry),
@@ -53,7 +54,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
             coordinator, entry, ["location", "timezone", "code"], "",
             "Timezone", "mdi:clock-time-eight-outline",
         ),
-    ])
+    ], config_subentry_id=core_settings_subentry_id)
 
 
     settings_coordinator: OvosSkillSettingsCoordinator = hass.data[DOMAIN][

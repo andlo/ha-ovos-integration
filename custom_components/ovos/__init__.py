@@ -6,6 +6,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import label_registry as lr
 
 from .const import (
     DOMAIN,
@@ -93,21 +94,52 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    # The one device every global OVOS setting entity (language, units,
-    # formats, location, confirm-listening, API URLs) attaches to --
-    # see const.py's own CORE_SETTINGS_DEVICE_ID comment for why this
-    # exists at all (a real, reported gap: without it, these entities
-    # had nowhere to show up as a group). Registered explicitly via the
-    # device registry, not as a side effect of some entity's own
-    # DeviceInfo -- same pattern sensor.py's own _ensure_hub_device
-    # already uses for the Skills/Skills Extra hub devices.
+    # See const.py's own CORE_SETTINGS_DEVICE_ID comment for why this
+    # subentry/device exists at all: a real, reported gap where these
+    # entities had nowhere to show up as a group, buried under HA's
+    # own generic "devices not belonging to a subentry" heading.
+    # Auto-created exactly once -- same "does one already exist"
+    # guard skill subentries don't need (they're keyed by skill_id,
+    # naturally idempotent per skill) but this singleton needs
+    # explicitly, since nothing else naturally prevents creating a
+    # second one on every restart. Same SOURCE_USER-required mechanism
+    # skill_subentry.py's own auto-import path already documents.
+    core_settings_subentry_id = next(
+        (
+            subentry_id for subentry_id, subentry in entry.subentries.items()
+            if subentry.subentry_type == "core_settings"
+        ),
+        None,
+    )
+    if core_settings_subentry_id is None:
+        await hass.config_entries.subentries.async_init(
+            (entry.entry_id, "core_settings"),
+            context={"source": "user"},
+            data={},
+        )
+        # Re-scan rather than pull an id out of the flow result directly
+        # -- confirmed the hard way (a real KeyError: 'subentry_id' on
+        # an actual Home Assistant instance) that the exact result shape
+        # isn't what was assumed. entry.subentries is refreshed in place
+        # by async_init itself (same object skill_subentry.py's own
+        # already-working lookups rely on elsewhere in this file), so
+        # this same "does one already exist" scan above is a robust
+        # way to get the id back regardless of the flow result's own
+        # exact structure.
+        core_settings_subentry_id = next(
+            subentry_id for subentry_id, subentry in entry.subentries.items()
+            if subentry.subentry_type == "core_settings"
+        )
+
     dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
+        config_subentry_id=core_settings_subentry_id,
         identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)},
         name="OpenVoiceOS Core Settings",
         manufacturer="OpenVoiceOS",
         model="ovos-core",
     )
+    hass.data[DOMAIN][f"{entry.entry_id}_core_settings_subentry"] = core_settings_subentry_id
 
     # Separate coordinator for per-skill settings (issue #3) -- polls
     # each installed skill's own add-on API, not the shared mycroft.conf,
@@ -119,9 +151,64 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][f"{entry.entry_id}_skill_settings"] = skill_settings_coordinator
 
     await _async_create_missing_skill_subentries(hass, entry, skill_settings_coordinator)
+    await _async_label_skill_devices(hass, entry, skill_settings_coordinator)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+SKILL_LABEL_NAME = "OVOS Skill"
+
+
+async def _async_ensure_skill_label(hass: HomeAssistant) -> str:
+    """Real, reported ask: filtering skill devices together elsewhere in
+    HA (Settings -> Devices, filtered by label) since the integration's
+    own page can't group them under a shared umbrella (subentries don't
+    nest, and MQTT's own docs confirm "each subentry holds one device"
+    is the intended pattern this project's own skill subentries already
+    follow -- see DEVELOPER.md).
+
+    label_registry.async_create raises ValueError if a label with this
+    name already exists -- confirmed by reading its own source directly,
+    unlike device_registry's own idempotent async_get_or_create -- so
+    this checks async_get_label_by_name first, same "does it already
+    exist" guard core_settings_subentry_id above already needs for the
+    same underlying reason (this runs on every restart, not just once).
+    """
+    registry = lr.async_get(hass)
+    label = registry.async_get_label_by_name(SKILL_LABEL_NAME)
+    if label is None:
+        label = registry.async_create(
+            SKILL_LABEL_NAME, icon="mdi:puzzle", description="An installed OVOS skill"
+        )
+    return label.label_id
+
+
+async def _async_label_skill_devices(
+    hass: HomeAssistant, entry: ConfigEntry, skill_settings_coordinator: OvosSkillSettingsCoordinator,
+) -> None:
+    """Applies the OVOS Skill label to every currently-known skill's own
+    device. device_registry.async_get_or_create has no labels parameter
+    at all -- confirmed by reading its own signature directly -- so this
+    is necessarily a separate async_update_device call per device,
+    using the device's own real device_id (not its identifiers tuple).
+    Not passing config_subentry_id to the async_get_or_create call
+    below is deliberate: that parameter defaults to UNDEFINED (leave
+    unchanged), so this can't accidentally move a device that already
+    has a real subentry into a different one -- same "moves the
+    device" warning already seen and understood elsewhere in this
+    project (see DEVELOPER.md) is not a risk here, since nothing here
+    ever passes a subentry id at all.
+    """
+    label_id = await _async_ensure_skill_label(hass)
+    device_registry = dr.async_get(hass)
+    for skill_id in skill_settings_coordinator.data:
+        device = device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, skill_id)},
+        )
+        if label_id not in device.labels:
+            device_registry.async_update_device(device.id, labels=device.labels | {label_id})
 
 
 async def _async_create_missing_skill_subentries(
