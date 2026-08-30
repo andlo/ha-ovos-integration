@@ -75,6 +75,7 @@ from .skill_settings import (
     resolve_fields,
     write_settings as _write_settings,
     fetch_current_settings as _fetch_current_settings,
+    list_installed_skills as _list_installed_skills,
 )
 
 REQUEST_TIMEOUT = 10  # catalog fetch / kicking off install — not waiting
@@ -154,6 +155,23 @@ class SkillSubentryFlowHandler(ConfigSubentryFlow):
         catalog = await self.hass.async_add_executor_job(self._fetch_catalog, api_url)
         if catalog is None:
             return self.async_abort(reason="catalog_unreachable")
+
+        # Confirmed real, reported gap (issue #5): without this,
+        # selecting an already-installed skill led to a confusing
+        # duplicate-subentry attempt or an unnecessary reinstall. Uses
+        # a fresh /skills call, the same one sensor.py/skill_settings_
+        # coordinator.py already use to discover installed skills --
+        # not the settings coordinator's own cached data, since a
+        # subentry flow has no straightforward handle on which config
+        # entry's coordinator to read from, and a skill installed only
+        # seconds ago (outside this flow) should still be excluded
+        # correctly right away, not after that coordinator's own next
+        # poll interval.
+        installed = await self.hass.async_add_executor_job(_list_installed_skills, api_url)
+        installed_ids = {item["skill_id"] for item in installed}
+        catalog = [item for item in catalog if item["skill_id"] not in installed_ids]
+        if not catalog:
+            return self.async_abort(reason="all_curated_skills_installed")
 
         self._skills_by_id = {item["skill_id"]: item for item in catalog}
 

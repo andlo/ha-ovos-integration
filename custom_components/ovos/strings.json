@@ -57,6 +57,7 @@
       "abort": {
         "no_api_url": "Set the \"Skills API URL\" text field (under the OpenVoiceOS integration's own entities) to your ovos-skills add-on's address first, e.g. http://<hostname>:8500.",
         "catalog_unreachable": "Could not reach the skill catalog via the configured Skills API URL.",
+        "all_curated_skills_installed": "Every skill in the curated catalog is already installed.",
         "unknown_skill": "That skill could not be found in the catalog.",
         "install_request_failed": "Could not start the install — check that the ovos-skills add-on is running and the Skills API URL is correct.",
         "settings_write_failed": "Could not save settings — check that the ovos-skills add-on is running and the Skills API URL is correct.",
