@@ -15,7 +15,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, CONF_LANG, CONF_SKILLS_API_URL, CONF_CORE_API_URL, CONF_PERSONA_API_URL, CONF_SKILLS_EXTRA_API_URL, CONF_SKILL_CONFIG_TOOL_URL
 from .coordinator import OvosSharedConfigCoordinator
-from .shared_config import write_shared_config_key
+from .shared_config import write_shared_config_key, write_nested_config_key
 from .skill_settings import write_settings
 from .skill_settings_coordinator import OvosSkillSettingsCoordinator
 
@@ -29,7 +29,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
         OvosPersonaApiUrlText(coordinator, entry),
         OvosSkillsExtraApiUrlText(coordinator, entry),
         OvosSkillConfigToolUrlText(coordinator, entry),
+        OvosNestedText(
+            coordinator, entry, ["location", "city", "name"], "",
+            "City", "mdi:city",
+        ),
+        OvosNestedText(
+            coordinator, entry, ["location", "city", "state", "name"], "",
+            "State/region", "mdi:map",
+        ),
+        OvosNestedText(
+            coordinator, entry, ["location", "city", "state", "code"], "",
+            "State/region code", "mdi:map",
+        ),
+        OvosNestedText(
+            coordinator, entry, ["location", "city", "state", "country", "name"], "",
+            "Country", "mdi:earth",
+        ),
+        OvosNestedText(
+            coordinator, entry, ["location", "city", "state", "country", "code"], "",
+            "Country code", "mdi:earth",
+        ),
+        OvosNestedText(
+            coordinator, entry, ["location", "timezone", "code"], "",
+            "Timezone", "mdi:clock-time-eight-outline",
+        ),
     ])
+
 
     settings_coordinator: OvosSkillSettingsCoordinator = hass.data[DOMAIN][
         f"{entry.entry_id}_skill_settings"
@@ -231,6 +256,70 @@ class OvosSkillConfigToolUrlText(CoordinatorEntity, TextEntity):
     async def async_set_value(self, value: str) -> None:
         await self.hass.async_add_executor_job(
             write_shared_config_key, CONF_SKILL_CONFIG_TOOL_URL, value
+        )
+        await self.coordinator.async_request_refresh()
+
+
+class OvosNestedText(CoordinatorEntity, TextEntity):
+    """Any of ovos-config's own nested string preferences (location's
+    own sub-fields, timezone code) -- deeper than write_shared_config_
+    key's own flat top-level-only merge handles, so writes go through
+    write_nested_config_key instead (see shared_config.py's own
+    docstring). One generic class rather than one near-identical one
+    per field, same reasoning as select.py's own OvosPreferenceSelect.
+
+    native_value walks self.coordinator.data directly -- NOT a fresh
+    disk read. Confirmed the hard way (a real
+    "Detected blocking call to open... inside the event loop" warning
+    on an actual Home Assistant instance): this property is called
+    synchronously from HA Core's own event loop, same as
+    OvosCoordinateNumber's own native_value in number.py already does
+    correctly (walking self.coordinator.data, not calling a disk-
+    reading helper) -- the coordinator's own _async_update_data is the
+    only place file I/O for reads is supposed to happen, already
+    correctly wrapped in async_add_executor_job.
+
+    Empty string default, not one of ovos-config's own baked-in values
+    like OvosPreferenceSelect's DEFAULT_* constants use -- confirmed by
+    reading ovos-config's own default mycroft.conf directly: its own
+    location block is a real US address (Lawrence, Kansas), not a
+    placeholder meant to be shipped as anyone's actual default: a
+    blank field prompting deliberate entry is more honest here than
+    quietly defaulting a Danish (or any other) install to Kansas.
+    """
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: OvosSharedConfigCoordinator,
+        entry: ConfigEntry,
+        path_parts: list[str],
+        default: str,
+        name: str,
+        icon: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._path_parts = path_parts
+        self._default = default
+        self._attr_name = name
+        self._attr_icon = icon
+        self._attr_unique_id = f"{entry.entry_id}_{'_'.join(path_parts)}"
+
+    @property
+    def native_value(self) -> str:
+        node = self.coordinator.data
+        for part in self._path_parts:
+            if not isinstance(node, dict) or part not in node:
+                return self._default
+            node = node[part]
+        return node
+
+    async def async_set_value(self, value: str) -> None:
+        await self.hass.async_add_executor_job(
+            write_nested_config_key, self._path_parts, value
         )
         await self.coordinator.async_request_refresh()
 

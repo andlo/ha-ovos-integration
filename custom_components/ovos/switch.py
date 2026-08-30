@@ -28,12 +28,17 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_CONFIRM_LISTENING, DEFAULT_CONFIRM_LISTENING
+from .coordinator import OvosSharedConfigCoordinator
+from .shared_config import write_shared_config_key
 from .skill_settings import write_settings
 from .skill_settings_coordinator import OvosSkillSettingsCoordinator
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities):
+    shared_coordinator: OvosSharedConfigCoordinator = hass.data[DOMAIN][entry.entry_id]
+    add_entities([OvosConfirmListeningSwitch(shared_coordinator, entry)])
+
     coordinator: OvosSkillSettingsCoordinator = hass.data[DOMAIN][
         f"{entry.entry_id}_skill_settings"
     ]
@@ -65,6 +70,42 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
             add_entities(entities, config_subentry_id=subentry_id)
         else:
             add_entities(entities)
+
+
+class OvosConfirmListeningSwitch(CoordinatorEntity, SwitchEntity):
+    """Whether OVOS plays a beep when it starts listening -- ovos-
+    config's own `confirm_listening` setting, the one boolean among its
+    top-level preferences (see const.py and select.py's own comment for
+    the rest of them). Backed by the shared-config coordinator, not the
+    per-skill one below -- this is a global OVOS preference, not a
+    skill's own setting.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Confirm listening"
+    _attr_icon = "mdi:bell-ring-outline"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator: OvosSharedConfigCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_confirm_listening"
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.coordinator.data.get(CONF_CONFIRM_LISTENING, DEFAULT_CONFIRM_LISTENING))
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._async_set(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._async_set(False)
+
+    async def _async_set(self, value: bool) -> None:
+        await self.hass.async_add_executor_job(
+            write_shared_config_key, CONF_CONFIRM_LISTENING, value
+        )
+        await self.coordinator.async_request_refresh()
 
 
 class OvosSkillSettingSwitch(CoordinatorEntity, SwitchEntity):
