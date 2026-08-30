@@ -42,6 +42,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN, PERSONA_DEVICE_ID, CONF_SKILLS_EXTRA_API_URL
 from .persona_coordinator import OvosPersonaCoordinator
 from .shared_config import read_shared_config
+from .skill_settings import uninstall_skill
+from .skill_settings_coordinator import OvosSkillSettingsCoordinator
 
 REQUEST_TIMEOUT = 10
 FALLBACK_SKILL_SOURCE = "skill-ovos-fallback-chatgpt"
@@ -61,6 +63,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
         [OvosPersonaFallbackSkillButton(coordinator, entry)],
         config_subentry_id=persona_subentry_id,
     )
+
+    skill_coordinator: OvosSkillSettingsCoordinator = hass.data[DOMAIN][
+        f"{entry.entry_id}_skill_settings"
+    ]
+    subentry_by_skill = {
+        subentry.data["skill_id"]: subentry_id
+        for subentry_id, subentry in entry.subentries.items()
+        if subentry.subentry_type == "skill"
+    }
+    for skill_id in skill_coordinator.data:
+        subentry_id = subentry_by_skill.get(skill_id)
+        button = OvosSkillUninstallButton(skill_coordinator, entry, skill_id)
+        if subentry_id:
+            add_entities([button], config_subentry_id=subentry_id)
+        else:
+            add_entities([button])
 
 
 class OvosPersonaFallbackSkillButton(CoordinatorEntity, ButtonEntity):
@@ -164,3 +182,74 @@ class OvosPersonaFallbackSkillButton(CoordinatorEntity, ButtonEntity):
             return resp.json()
         except requests.RequestException:
             return None
+
+
+class OvosSkillUninstallButton(CoordinatorEntity, ButtonEntity):
+    """Real, reported gap: nothing anywhere in this integration could
+    actually uninstall a skill before -- HA's own "remove subentry"
+    action (the trash icon on a skill's own subentry) only deletes
+    this integration's OWN record of it (the subentry, its entities),
+    never touching the add-on's own venv, so the skill kept running
+    and answering regardless of what HA itself showed.
+
+    A button, matching this session's own "entity for data, button for
+    the one-off action" pattern (see OvosPersonaFallbackSkillButton
+    above) -- uninstalling is exactly that kind of one-off action, not
+    a persistent setting.
+
+    Also removes the skill's own subentry (if one exists) after a
+    successful uninstall, so HA's own representation doesn't linger
+    showing a skill that no longer exists on the add-on's own side --
+    the two were never linked automatically before this.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Uninstall"
+    _attr_icon = "mdi:delete-outline"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self, coordinator: OvosSkillSettingsCoordinator, entry: ConfigEntry, skill_id: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._skill_id = skill_id
+        self._attr_unique_id = f"{skill_id}_uninstall"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, skill_id)})
+
+    async def async_press(self) -> None:
+        skill_data = self.coordinator.data.get(self._skill_id, {})
+        api_url = skill_data.get("api_url")
+        if not api_url:
+            async_create_notification(
+                self.hass,
+                f"Could not determine which add-on installed {self._skill_id} -- not uninstalled.",
+                title="OVOS skill uninstall",
+            )
+            return
+
+        success = await self.hass.async_add_executor_job(
+            uninstall_skill, api_url, self._skill_id
+        )
+        if not success:
+            async_create_notification(
+                self.hass,
+                f"Could not uninstall {self._skill_id} -- check the add-on's own log.",
+                title="OVOS skill uninstall",
+            )
+            return
+
+        subentry = next(
+            (
+                s for s in self._entry.subentries.values()
+                if s.subentry_type == "skill" and s.data.get("skill_id") == self._skill_id
+            ),
+            None,
+        )
+        if subentry:
+            self.hass.config_entries.async_remove_subentry(self._entry, subentry.subentry_id)
+
+        async_create_notification(
+            self.hass, f"Uninstalled {self._skill_id}.", title="OVOS skill uninstall"
+        )
+        await self.coordinator.async_request_refresh()

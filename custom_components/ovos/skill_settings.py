@@ -158,6 +158,25 @@ def set_skill_active(api_url: str, skill_id: str, active: bool) -> bool:
         return False
 
 
+def uninstall_skill(api_url: str, skill_id: str) -> bool:
+    """DELETE /skills/{skill_id} -- removes the skill's own venv
+    entirely (see either add-on's own DOCS.md: "Uninstall -- removes
+    the skill's own venv"). Genuinely different from set_skill_active
+    above: that keeps the skill installed but non-responsive; this
+    removes it, matching what a person expects "uninstall" to mean.
+    A real, reported gap: no button/action anywhere in this
+    integration could trigger this before -- HA's own "remove
+    subentry" action only deletes this integration's OWN record of the
+    skill (its subentry/entities), never touching the add-on's own
+    venv, so the skill kept running and answering regardless.
+    """
+    try:
+        resp = requests.delete(f"{api_url}/skills/{skill_id}", timeout=REQUEST_TIMEOUT)
+        return resp.status_code == 200
+    except requests.RequestException:
+        return False
+
+
 def prettify_skill_id(skill_id: str) -> str:
     """Last-resort display name when no catalog entry and no subentry
     title exist for a skill (always true for ovos-skills-extra
