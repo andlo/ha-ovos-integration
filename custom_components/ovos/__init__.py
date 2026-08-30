@@ -5,9 +5,11 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 
 from .const import (
     DOMAIN,
+    CORE_SETTINGS_DEVICE_ID,
     CONF_LANG,
     CONF_LATITUDE,
     CONF_LONGITUDE,
@@ -90,6 +92,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await coordinator.async_request_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+
+    # The one device every global OVOS setting entity (language, units,
+    # formats, location, confirm-listening, API URLs) attaches to --
+    # see const.py's own CORE_SETTINGS_DEVICE_ID comment for why this
+    # exists at all (a real, reported gap: without it, these entities
+    # had nowhere to show up as a group). Registered explicitly via the
+    # device registry, not as a side effect of some entity's own
+    # DeviceInfo -- same pattern sensor.py's own _ensure_hub_device
+    # already uses for the Skills/Skills Extra hub devices.
+    dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)},
+        name="OpenVoiceOS Core Settings",
+        manufacturer="OpenVoiceOS",
+        model="ovos-core",
+    )
 
     # Separate coordinator for per-skill settings (issue #3) -- polls
     # each installed skill's own add-on API, not the shared mycroft.conf,

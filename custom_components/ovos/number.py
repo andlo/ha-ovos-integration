@@ -13,7 +13,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CONF_LATITUDE, CONF_LONGITUDE
+from .const import DOMAIN, CORE_SETTINGS_DEVICE_ID, CONF_LATITUDE, CONF_LONGITUDE
 from .coordinator import OvosSharedConfigCoordinator
 from .shared_config import read_shared_config, write_shared_config_key
 from .skill_settings import write_settings
@@ -66,6 +66,7 @@ class OvosCoordinateNumber(CoordinatorEntity, NumberEntity):
 
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_device_info = DeviceInfo(identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)})
     _attr_native_min_value = -180.0
     _attr_native_max_value = 180.0
     _attr_native_step = 0.000001

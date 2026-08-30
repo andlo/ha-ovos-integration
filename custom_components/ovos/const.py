@@ -2,6 +2,18 @@
 
 DOMAIN = "ovos"
 
+# Device identifier for the one device grouping every global OVOS
+# setting entity (language, units, formats, location, confirm-listening,
+# API URLs) -- confirmed missing was a real, reported gap: without an
+# explicit device, these entities had nowhere to show up as a group on
+# the integration's own page, unlike skills which each get their own
+# device via a subentry or sensor.py's own hub-device fallback. Created
+# once via device_registry.async_get_or_create in __init__.py, same
+# pattern sensor.py's own _ensure_hub_device already uses for the
+# Skills/Skills Extra hub devices -- entities then just reference it by
+# identifiers alone, they don't recreate it.
+CORE_SETTINGS_DEVICE_ID = "core_settings"
+
 # Shared config file written and read by both this integration and every
 # add-on in haos-ovos-addons. All of them export XDG_CONFIG_HOME=/share,
 # which is what makes /share/mycroft/mycroft.conf the common ground —

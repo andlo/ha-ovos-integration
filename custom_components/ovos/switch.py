@@ -28,7 +28,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CONF_CONFIRM_LISTENING, DEFAULT_CONFIRM_LISTENING
+from .const import DOMAIN, CORE_SETTINGS_DEVICE_ID, CONF_CONFIRM_LISTENING, DEFAULT_CONFIRM_LISTENING
 from .coordinator import OvosSharedConfigCoordinator
 from .shared_config import write_shared_config_key
 from .skill_settings import write_settings
@@ -85,6 +85,7 @@ class OvosConfirmListeningSwitch(CoordinatorEntity, SwitchEntity):
     _attr_name = "Confirm listening"
     _attr_icon = "mdi:bell-ring-outline"
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_device_info = DeviceInfo(identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)})
 
     def __init__(self, coordinator: OvosSharedConfigCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)

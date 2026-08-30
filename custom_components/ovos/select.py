@@ -10,11 +10,12 @@ from __future__ import annotations
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
-    DOMAIN, CONF_SYSTEM_UNIT, UNIT_METRIC, UNIT_IMPERIAL,
+    DOMAIN, CORE_SETTINGS_DEVICE_ID, CONF_SYSTEM_UNIT, UNIT_METRIC, UNIT_IMPERIAL,
     CONF_TEMPERATURE_UNIT, DEFAULT_TEMPERATURE_UNIT, TEMP_CELSIUS, TEMP_FAHRENHEIT,
     CONF_WINDSPEED_UNIT, DEFAULT_WINDSPEED_UNIT, WINDSPEED_UNITS,
     CONF_PRECIPITATION_UNIT, DEFAULT_PRECIPITATION_UNIT, PRECIPITATION_UNITS,
@@ -63,6 +64,7 @@ class OvosSystemUnitSelect(CoordinatorEntity, SelectEntity):
     _attr_icon = "mdi:ruler"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_options = [UNIT_METRIC, UNIT_IMPERIAL]
+    _attr_device_info = DeviceInfo(identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)})
 
     def __init__(self, coordinator: OvosSharedConfigCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
@@ -98,6 +100,7 @@ class OvosPreferenceSelect(CoordinatorEntity, SelectEntity):
 
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_device_info = DeviceInfo(identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)})
 
     def __init__(
         self,

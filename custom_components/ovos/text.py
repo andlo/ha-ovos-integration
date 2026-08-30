@@ -13,7 +13,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CONF_LANG, CONF_SKILLS_API_URL, CONF_CORE_API_URL, CONF_PERSONA_API_URL, CONF_SKILLS_EXTRA_API_URL, CONF_SKILL_CONFIG_TOOL_URL
+from .const import DOMAIN, CORE_SETTINGS_DEVICE_ID, CONF_LANG, CONF_SKILLS_API_URL, CONF_CORE_API_URL, CONF_PERSONA_API_URL, CONF_SKILLS_EXTRA_API_URL, CONF_SKILL_CONFIG_TOOL_URL
 from .coordinator import OvosSharedConfigCoordinator
 from .shared_config import write_shared_config_key, write_nested_config_key
 from .skill_settings import write_settings
@@ -89,6 +89,7 @@ class OvosLanguageText(CoordinatorEntity, TextEntity):
     """
 
     _attr_has_entity_name = True
+    _attr_device_info = DeviceInfo(identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)})
     _attr_name = "Language"
     _attr_icon = "mdi:translate"
     _attr_entity_category = EntityCategory.CONFIG
@@ -118,6 +119,7 @@ class OvosSkillsApiUrlText(CoordinatorEntity, TextEntity):
     """
 
     _attr_has_entity_name = True
+    _attr_device_info = DeviceInfo(identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)})
     _attr_name = "Skills API URL"
     _attr_icon = "mdi:link-variant"
     _attr_entity_category = EntityCategory.CONFIG
@@ -149,6 +151,7 @@ class OvosCoreApiUrlText(CoordinatorEntity, TextEntity):
     """
 
     _attr_has_entity_name = True
+    _attr_device_info = DeviceInfo(identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)})
     _attr_name = "Core API URL"
     _attr_icon = "mdi:link-variant"
     _attr_entity_category = EntityCategory.CONFIG
@@ -179,6 +182,7 @@ class OvosPersonaApiUrlText(CoordinatorEntity, TextEntity):
     """
 
     _attr_has_entity_name = True
+    _attr_device_info = DeviceInfo(identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)})
     _attr_name = "Persona API URL"
     _attr_icon = "mdi:link-variant"
     _attr_entity_category = EntityCategory.CONFIG
@@ -208,6 +212,7 @@ class OvosSkillsExtraApiUrlText(CoordinatorEntity, TextEntity):
     """
 
     _attr_has_entity_name = True
+    _attr_device_info = DeviceInfo(identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)})
     _attr_name = "Skills Extra API URL"
     _attr_icon = "mdi:link-variant"
     _attr_entity_category = EntityCategory.CONFIG
@@ -240,6 +245,7 @@ class OvosSkillConfigToolUrlText(CoordinatorEntity, TextEntity):
     """
 
     _attr_has_entity_name = True
+    _attr_device_info = DeviceInfo(identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)})
     _attr_name = "Skill Config Tool URL"
     _attr_icon = "mdi:link-variant"
     _attr_entity_category = EntityCategory.CONFIG
@@ -289,6 +295,7 @@ class OvosNestedText(CoordinatorEntity, TextEntity):
     """
 
     _attr_has_entity_name = True
+    _attr_device_info = DeviceInfo(identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)})
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
