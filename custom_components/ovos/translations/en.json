@@ -90,6 +90,24 @@
         "autoconfigure_nothing_found": "No text-to-speech/speech-to-text option was found for **{lang}** with that combination.\n\nTry a different voice mode or gender, or leave voice gender unset.",
         "autoconfigure_success": "Set up for **{lang}**.\n\n- Text-to-speech: `{tts_module}`\n- Speech-to-text: `{stt_module}`\n\nRestart the TTS/STT add-ons to use these. If either one doesn't start afterwards, add its name under that add-on's own \"Extra pip packages\" setting."
       }
+    },
+    "core_settings": {
+      "title": "OVOS Core Settings",
+      "initiate_flow": {
+        "user": "Core Settings"
+      },
+      "abort": {
+        "already_configured": "There's already one Core Settings device -- it holds every global OVOS setting (language, units, location, and more) and is created automatically. Find it under this integration's own devices rather than adding another."
+      }
+    },
+    "persona": {
+      "title": "OVOS Persona",
+      "initiate_flow": {
+        "user": "Persona"
+      },
+      "abort": {
+        "already_configured": "There's already one Persona device -- it holds the solver list, reachability, and fallback-skill button, and is created automatically. Find it under this integration's own devices rather than adding another."
+      }
     }
   }
 }

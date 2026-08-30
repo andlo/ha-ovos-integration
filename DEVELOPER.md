@@ -142,6 +142,14 @@ Added `uninstall_skill()` (`skill_settings.py`, same shape as `set_skill_active`
 
 **Takeaway for next time**: when an entire platform's entities are missing with zero log output, don't assume it's the same "docker logs stops showing" quirk -- confirm the module actually imports cleanly first, directly and manually, before spending more time on log archaeology. And after editing multiple files together, verify each one independently made it onto the actual running instance (a `grep` for a distinctive string in the deployed file, not just "the deploy command didn't error") before ruling out a stale-file explanation.
 
+## The "core_settings"/"persona" subentry types show up as unlabeled, clickable "+" buttons -- confirmed real, partially fixed
+
+Raised directly: two extra "+" icon-only buttons (no text) sit next to the properly-labeled "Add skill"/"Autoconfigure voice" ones on the integration's own page. Clicking either gives an `already_configured` error.
+
+**Confirmed why**: any subentry type registered in `async_get_supported_subentry_types()` gets its own "add" entry point in Home Assistant's own UI automatically -- there's no flag found (checked `ConfigSubentryFlow`'s own base class directly) to mark a subentry type as "singleton, not meant to be manually added". `core_settings` and `persona` are exactly that: auto-created once by `__init__.py`, never meant to be triggered by a person. Without their own `initiate_flow`/`abort` translation strings (removed when these became trivial structural flows, since they used to have a real interactive form), Home Assistant's UI falls back to an unlabeled icon-only button, and clicking it hits the same generic `already_configured` abort every subentry type gets for a duplicate unique_id.
+
+**What's fixed**: `strings.json`/`translations/en.json` now give both a real label ("Core Settings", "Persona") and a specific, friendly `already_configured` message explaining the device already exists and is created automatically, instead of Home Assistant's own generic wording. This makes clicking them understandable, not confusing -- but does NOT remove the buttons themselves; no mechanism to hide a subentry type from the "add" menu entirely was found in this HA version's own `config_entries.py`, despite checking. Worth another look if a real fix (hiding them outright) becomes important -- for now, a clear label plus a clear abort message is the practical mitigation.
+
 ## Relationship to the other repo
 
 [haos-ovos-addons](https://github.com/andlo/haos-ovos-addons) — the Supervisor add-ons this integration configures. See in particular `ovos-skills`/`ovos-skills-extra` (the skill install APIs this integration's subentries call) and `ovos-persona` (the solver-configuration API).
