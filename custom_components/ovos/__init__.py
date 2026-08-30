@@ -11,6 +11,7 @@ from homeassistant.helpers import label_registry as lr
 from .const import (
     DOMAIN,
     CORE_SETTINGS_DEVICE_ID,
+    PERSONA_DEVICE_ID,
     CONF_LANG,
     CONF_LATITUDE,
     CONF_LONGITUDE,
@@ -22,6 +23,7 @@ from .const import (
     CONF_SKILLS_EXTRA_API_URL,
 )
 from .coordinator import OvosSharedConfigCoordinator
+from .persona_coordinator import OvosPersonaCoordinator
 from .shared_config import write_shared_config_key
 from .skill_settings import fetch_catalog_names, get_skills_api_url, prettify_skill_id
 from .skill_settings_coordinator import OvosSkillSettingsCoordinator
@@ -29,7 +31,7 @@ from .supervisor_discovery import async_discover_addon_api_urls
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["text", "number", "select", "sensor", "switch", "conversation"]
+PLATFORMS = ["text", "number", "select", "sensor", "switch", "binary_sensor", "button", "conversation"]
 
 
 def _seed_missing_keys(current: dict, entry: ConfigEntry) -> bool:
@@ -140,6 +142,42 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         model="ovos-core",
     )
     hass.data[DOMAIN][f"{entry.entry_id}_core_settings_subentry"] = core_settings_subentry_id
+
+    # Same pattern again, for the device grouping ovos-persona's own
+    # live entities (solver list, reachability, fallback-skill button)
+    # -- replaces the old one-off persona_subentry.py flow, see
+    # const.py's own PERSONA_DEVICE_ID comment for the full reasoning.
+    persona_subentry_id = next(
+        (
+            subentry_id for subentry_id, subentry in entry.subentries.items()
+            if subentry.subentry_type == "persona"
+        ),
+        None,
+    )
+    if persona_subentry_id is None:
+        await hass.config_entries.subentries.async_init(
+            (entry.entry_id, "persona"),
+            context={"source": "user"},
+            data={},
+        )
+        persona_subentry_id = next(
+            subentry_id for subentry_id, subentry in entry.subentries.items()
+            if subentry.subentry_type == "persona"
+        )
+
+    dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        config_subentry_id=persona_subentry_id,
+        identifiers={(DOMAIN, PERSONA_DEVICE_ID)},
+        name="OpenVoiceOS Persona",
+        manufacturer="OpenVoiceOS",
+        model="ovos-persona",
+    )
+    hass.data[DOMAIN][f"{entry.entry_id}_persona_subentry"] = persona_subentry_id
+
+    persona_coordinator = OvosPersonaCoordinator(hass)
+    await persona_coordinator.async_config_entry_first_refresh()
+    hass.data[DOMAIN][f"{entry.entry_id}_persona"] = persona_coordinator
 
     # Separate coordinator for per-skill settings (issue #3) -- polls
     # each installed skill's own add-on API, not the shared mycroft.conf,

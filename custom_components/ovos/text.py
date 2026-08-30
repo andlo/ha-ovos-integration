@@ -13,8 +13,9 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CORE_SETTINGS_DEVICE_ID, CONF_LANG, CONF_SKILLS_API_URL, CONF_CORE_API_URL, CONF_PERSONA_API_URL, CONF_SKILLS_EXTRA_API_URL, CONF_SKILL_CONFIG_TOOL_URL, CORE_TEXT_SETTINGS, CORE_LIST_SETTINGS
+from .const import DOMAIN, CORE_SETTINGS_DEVICE_ID, PERSONA_DEVICE_ID, CONF_LANG, CONF_SKILLS_API_URL, CONF_CORE_API_URL, CONF_PERSONA_API_URL, CONF_SKILLS_EXTRA_API_URL, CONF_SKILL_CONFIG_TOOL_URL, CORE_TEXT_SETTINGS, CORE_LIST_SETTINGS
 from .coordinator import OvosSharedConfigCoordinator
+from .persona_coordinator import OvosPersonaCoordinator, write_persona_settings
 from .shared_config import write_shared_config_key, write_nested_config_key
 from .skill_settings import write_settings
 from .skill_settings_coordinator import OvosSkillSettingsCoordinator
@@ -66,6 +67,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
         OvosNestedList(coordinator, entry, *row)
         for row in CORE_LIST_SETTINGS
     ], config_subentry_id=core_settings_subentry_id)
+
+    persona_coordinator: OvosPersonaCoordinator = hass.data[DOMAIN][f"{entry.entry_id}_persona"]
+    persona_subentry_id = hass.data[DOMAIN][f"{entry.entry_id}_persona_subentry"]
+    add_entities(
+        [OvosPersonaSolversText(persona_coordinator, entry)],
+        config_subentry_id=persona_subentry_id,
+    )
 
 
     settings_coordinator: OvosSkillSettingsCoordinator = hass.data[DOMAIN][
@@ -406,6 +414,67 @@ class OvosNestedList(CoordinatorEntity, TextEntity):
         items = [item for item in items if item]
         await self.hass.async_add_executor_job(
             write_nested_config_key, self._path_parts, items
+        )
+        await self.coordinator.async_request_refresh()
+
+
+class OvosPersonaSolversText(CoordinatorEntity, TextEntity):
+    """ovos-persona's own "solvers" list (which question-solver plugins
+    run, in priority order) -- persona.json's own field, edited here as
+    a comma-separated string, same OvosNestedList-style approach as
+    intents.pipeline above, but reading/writing via ovos-persona's own
+    API rather than the shared mycroft.conf (a genuinely different data
+    source -- see persona_coordinator.py's own docstring).
+
+    Replaces the old persona_subentry.py flow's own interactive form --
+    see that file's own module docstring and const.py's
+    PERSONA_DEVICE_ID comment for the full reasoning agreed directly.
+
+    Unavailable (not just empty) when ovos-persona isn't configured or
+    isn't reachable -- see persona_coordinator.py's own "configured" vs
+    "reachable" distinction; this entity has nothing meaningful to show
+    or write in that state, so it shouldn't pretend otherwise.
+
+    No validation of the solver names typed in -- ovos-persona's own
+    /available-solvers is queried live by anything that wants to show
+    valid options (unlike intents.pipeline's own stage names, this
+    list COULD in principle be validated against a live source, but
+    kept consistent with OvosNestedList's own "no content validation"
+    philosophy here rather than introducing a different rule for this
+    one entity).
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Solvers"
+    _attr_icon = "mdi:brain"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_max = 500
+    _attr_device_info = DeviceInfo(identifiers={(DOMAIN, PERSONA_DEVICE_ID)})
+
+    def __init__(self, coordinator: OvosPersonaCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_persona_solvers"
+
+    @property
+    def available(self) -> bool:
+        return bool(self.coordinator.data.get("reachable", False))
+
+    @property
+    def native_value(self) -> str:
+        solvers = self.coordinator.data.get("current_settings", {}).get("solvers", [])
+        return ", ".join(str(s) for s in solvers)
+
+    async def async_set_value(self, value: str) -> None:
+        api_url = self.coordinator.data.get("api_url")
+        if not api_url:
+            return
+        items = [item.strip() for item in value.split(",")]
+        items = [item for item in items if item]
+        current = self.coordinator.data.get("current_settings", {})
+        merged = {**current, "solvers": items}
+        await self.hass.async_add_executor_job(
+            write_persona_settings, api_url, merged
         )
         await self.coordinator.async_request_refresh()
 

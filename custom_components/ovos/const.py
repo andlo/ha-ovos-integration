@@ -14,6 +14,15 @@ DOMAIN = "ovos"
 # identifiers alone, they don't recreate it.
 CORE_SETTINGS_DEVICE_ID = "core_settings"
 
+# Same idea, for the one device grouping ovos-persona's own live
+# entities (solver list, reachability, fallback-skill setup) -- moved
+# here from a one-off "Add sub-entry" flow (persona_subentry.py,
+# removed) after direct agreement: entity for data, button for the
+# one-off fallback-skill action, sensor for status, no flow left. Its
+# own auto-created "persona" subentry, same pattern as
+# CORE_SETTINGS_DEVICE_ID's own "core_settings" subentry.
+PERSONA_DEVICE_ID = "persona"
+
 # Shared config file written and read by both this integration and every
 # add-on in haos-ovos-addons. All of them export XDG_CONFIG_HOME=/share,
 # which is what makes /share/mycroft/mycroft.conf the common ground —

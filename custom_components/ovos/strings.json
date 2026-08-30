@@ -90,28 +90,6 @@
         "autoconfigure_nothing_found": "No text-to-speech/speech-to-text option was found for **{lang}** with that combination.\n\nTry a different voice mode or gender, or leave voice gender unset.",
         "autoconfigure_success": "Set up for **{lang}**.\n\n- Text-to-speech: `{tts_module}`\n- Speech-to-text: `{stt_module}`\n\nRestart the TTS/STT add-ons to use these. If either one doesn't start afterwards, add its name under that add-on's own \"Extra pip packages\" setting."
       }
-    },
-    "persona": {
-      "title": "Persona settings",
-      "initiate_flow": {
-        "user": "Persona settings"
-      },
-      "step": {
-        "user": {
-          "title": "Choose active solvers",
-          "description": "Pick which question-answering engines the persona tries, and in what order (the first one that answers wins). This writes directly into the ovos-persona add-on's own configuration and restarts it to apply.",
-          "data": {
-            "solvers": "Active solvers"
-          }
-        }
-      },
-      "abort": {
-        "no_persona_api_url": "Set the \"Persona API URL\" text field (under the OpenVoiceOS integration's own entities) to your ovos-persona add-on's address first, e.g. http://<hostname>:8338.",
-        "persona_unreachable": "Couldn't reach the ovos-persona add-on at the configured Persona API URL. This feature needs ovos-persona installed and running.",
-        "no_solvers_found": "No solver plugins were found installed in the ovos-persona add-on -- nothing to choose from yet.",
-        "settings_write_failed": "Could not save the solver list -- check that the ovos-persona add-on is running and the Persona API URL is correct.",
-        "persona_success": "Done. Active solvers, in order: {solvers}.{fallback_note} The ovos-persona add-on has restarted to apply this."
-      }
     }
   }
 }
