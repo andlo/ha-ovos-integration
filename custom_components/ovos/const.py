@@ -136,6 +136,8 @@ CORE_NUMBER_SETTINGS = [
     (["intents", "common_query", "extension_time"], "Common Query extension time", "mdi:timer-sand", 3, 0, 30, 1),
     (["intents", "OCP", "classifier_threshold"], "OCP classifier threshold", "mdi:gauge", 0.4, 0.0, 1.0, 0.01),
     (["intents", "OCP", "min_score"], "OCP minimum score", "mdi:gauge", 40, 0, 100, 1),
+    (["skills", "converse", "timeout"], "Converse timeout", "mdi:timer-outline", 300, 5, 3600, 5),
+    (["skills", "converse", "max_activations"], "Converse max activations/min", "mdi:counter", -1, -1, 100, 1),
 ]
 
 # Each row: (path_parts, name, icon, default)
@@ -151,6 +153,8 @@ CORE_SWITCH_SETTINGS = [
     (["intents", "OCP", "filter_media"], "OCP filter wrong media type", "mdi:filter", True),
     (["intents", "OCP", "filter_SEI"], "OCP filter unplayable results", "mdi:filter", True),
     (["intents", "OCP", "search_fallback"], "OCP fall back to generic search", "mdi:magnify", True),
+    (["skills", "converse", "cross_activation"], "Converse cross-activation", "mdi:swap-horizontal", True),
+    (["skills", "converse", "cross_deactivation"], "Converse cross-deactivation", "mdi:swap-horizontal", True),
 ]
 
 # Each row: (path_parts, name, icon, default, options) -- default
@@ -158,11 +162,44 @@ CORE_SWITCH_SETTINGS = [
 # OvosNestedSelect's own docstring in select.py for why this matters.
 CORE_SELECT_SETTINGS = [
     (["intents", "OCP", "playback_mode"], "OCP playback mode", "mdi:play-circle-outline", 0, ["0", "10", "20"]),
+    (["skills", "converse", "converse_mode"], "Converse mode", "mdi:forum-outline", "accept_all", ["accept_all", "whitelist", "blacklist"]),
+    (["skills", "converse", "converse_activation"], "Converse activation mode", "mdi:forum-outline", "accept_all", ["accept_all", "priority", "whitelist", "blacklist"]),
+    (["skills", "fallbacks", "fallback_mode"], "Fallback mode", "mdi:arrow-decision-outline", "accept_all", ["accept_all", "whitelist", "blacklist"]),
 ]
 
 # Each row: (path_parts, name, icon, default) -- reuses text.py's own
 # already-generic OvosNestedText directly, no new class needed.
 CORE_TEXT_SETTINGS = [
     (["intents", "common_query", "reranker"], "Common Query reranker", "mdi:sort", "ovos-choice-solver-bm25"),
+]
+
+# Each row: (path_parts, name, icon, default_list) -- lists of names
+# ovos-config itself stores as a JSON array, edited here as a plain
+# comma-separated text field (OvosNestedList in text.py). Deliberately
+# NO validation against a fixed set of known-valid names -- raised
+# directly: intents.pipeline's own valid stage names (and skill_ids
+# for the others) are not a closed set this integration can hardcode
+# a check against; OVOS itself can add/remove/rename pipeline stages
+# over time, and skills are installed/removed freely. Only whitespace
+# trimming and dropping empty entries (from a stray leading/trailing/
+# double comma) happens here -- real validation of the CONTENT is left
+# to OVOS itself at the point it actually reads this config, the same
+# as if it had been hand-edited in mycroft.conf directly.
+#
+# intents.pipeline's own default here is ovos-config's own real
+# baked-in default order, confirmed by reading its own default
+# mycroft.conf directly -- not reordering it, just making the existing
+# default editable.
+CORE_LIST_SETTINGS = [
+    (["intents", "pipeline"], "Intent pipeline order", "mdi:sort-variant", [
+        "stop_high", "converse", "ocp_high", "padatious_high", "adapt_high",
+        "ocp_medium", "fallback_high", "stop_medium", "adapt_medium", "adapt_low",
+        "common_qa", "fallback_medium", "fallback_low",
+    ]),
+    (["skills", "blacklisted_skills"], "Blacklisted skills", "mdi:cancel", ["skill-ovos-stop.openvoiceos"]),
+    (["skills", "converse", "converse_whitelist"], "Converse whitelist", "mdi:check-circle-outline", []),
+    (["skills", "converse", "converse_blacklist"], "Converse blacklist", "mdi:cancel", []),
+    (["skills", "fallbacks", "fallback_whitelist"], "Fallback whitelist", "mdi:check-circle-outline", []),
+    (["skills", "fallbacks", "fallback_blacklist"], "Fallback blacklist", "mdi:cancel", []),
 ]
 

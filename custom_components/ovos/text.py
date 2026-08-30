@@ -13,7 +13,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CORE_SETTINGS_DEVICE_ID, CONF_LANG, CONF_SKILLS_API_URL, CONF_CORE_API_URL, CONF_PERSONA_API_URL, CONF_SKILLS_EXTRA_API_URL, CONF_SKILL_CONFIG_TOOL_URL, CORE_TEXT_SETTINGS
+from .const import DOMAIN, CORE_SETTINGS_DEVICE_ID, CONF_LANG, CONF_SKILLS_API_URL, CONF_CORE_API_URL, CONF_PERSONA_API_URL, CONF_SKILLS_EXTRA_API_URL, CONF_SKILL_CONFIG_TOOL_URL, CORE_TEXT_SETTINGS, CORE_LIST_SETTINGS
 from .coordinator import OvosSharedConfigCoordinator
 from .shared_config import write_shared_config_key, write_nested_config_key
 from .skill_settings import write_settings
@@ -62,6 +62,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
         # changing that signature to match this table's own row order.
         OvosNestedText(coordinator, entry, row[0], row[3], row[1], row[2])
         for row in CORE_TEXT_SETTINGS
+    ] + [
+        OvosNestedList(coordinator, entry, *row)
+        for row in CORE_LIST_SETTINGS
     ], config_subentry_id=core_settings_subentry_id)
 
 
@@ -336,6 +339,73 @@ class OvosNestedText(CoordinatorEntity, TextEntity):
     async def async_set_value(self, value: str) -> None:
         await self.hass.async_add_executor_job(
             write_nested_config_key, self._path_parts, value
+        )
+        await self.coordinator.async_request_refresh()
+
+
+class OvosNestedList(CoordinatorEntity, TextEntity):
+    """Any row from const.py's own CORE_LIST_SETTINGS table -- ovos-
+    config's own JSON-array settings (intents.pipeline's own stage
+    order, skill blacklists/whitelists), edited here as a plain
+    comma-separated text field rather than a dropdown of any kind.
+
+    Deliberately NO validation of the actual stage/skill names typed
+    in, beyond basic hygiene (trimming whitespace, dropping empty
+    entries from a stray comma) -- raised directly: these aren't a
+    fixed set this integration could hardcode a check against without
+    working against its own future maintainability. intents.pipeline's
+    own valid stage names can change as OVOS itself evolves, and
+    skill_ids come and go as skills are installed/removed -- real
+    validation of the CONTENT is OVOS's own job when it actually reads
+    this config, same as if it had been hand-edited in mycroft.conf
+    directly. This entity's own job is only getting a list in and out
+    of a single text field faithfully.
+
+    _attr_native_max deliberately generous (intents.pipeline's own
+    default already runs to roughly 170 characters) -- confirmed by
+    counting it directly, not guessed, so this doesn't silently clip a
+    real list.
+    """
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_device_info = DeviceInfo(identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)})
+    _attr_native_max = 1000
+
+    def __init__(
+        self,
+        coordinator: OvosSharedConfigCoordinator,
+        entry: ConfigEntry,
+        path_parts: list[str],
+        name: str,
+        icon: str,
+        default: list[str],
+    ) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._path_parts = path_parts
+        self._default = default
+        self._attr_name = name
+        self._attr_icon = icon
+        self._attr_unique_id = f"{entry.entry_id}_{'_'.join(path_parts)}"
+
+    @property
+    def native_value(self) -> str:
+        node = self.coordinator.data
+        for part in self._path_parts:
+            if not isinstance(node, dict) or part not in node:
+                node = self._default
+                break
+            node = node[part]
+        if isinstance(node, list):
+            return ", ".join(str(item) for item in node)
+        return str(node)
+
+    async def async_set_value(self, value: str) -> None:
+        items = [item.strip() for item in value.split(",")]
+        items = [item for item in items if item]
+        await self.hass.async_add_executor_job(
+            write_nested_config_key, self._path_parts, items
         )
         await self.coordinator.async_request_refresh()
 
