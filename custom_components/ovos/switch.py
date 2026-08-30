@@ -28,9 +28,9 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CORE_SETTINGS_DEVICE_ID, CONF_CONFIRM_LISTENING, DEFAULT_CONFIRM_LISTENING
+from .const import DOMAIN, CORE_SETTINGS_DEVICE_ID, CONF_CONFIRM_LISTENING, DEFAULT_CONFIRM_LISTENING, CORE_SWITCH_SETTINGS
 from .coordinator import OvosSharedConfigCoordinator
-from .shared_config import write_shared_config_key
+from .shared_config import write_shared_config_key, write_nested_config_key
 from .skill_settings import write_settings
 from .skill_settings_coordinator import OvosSkillSettingsCoordinator
 
@@ -39,7 +39,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
     shared_coordinator: OvosSharedConfigCoordinator = hass.data[DOMAIN][entry.entry_id]
     core_settings_subentry_id = hass.data[DOMAIN][f"{entry.entry_id}_core_settings_subentry"]
     add_entities(
-        [OvosConfirmListeningSwitch(shared_coordinator, entry)],
+        [OvosConfirmListeningSwitch(shared_coordinator, entry)] + [
+            OvosNestedSwitch(shared_coordinator, entry, *row)
+            for row in CORE_SWITCH_SETTINGS
+        ],
         config_subentry_id=core_settings_subentry_id,
     )
 
@@ -109,6 +112,57 @@ class OvosConfirmListeningSwitch(CoordinatorEntity, SwitchEntity):
     async def _async_set(self, value: bool) -> None:
         await self.hass.async_add_executor_job(
             write_shared_config_key, CONF_CONFIRM_LISTENING, value
+        )
+        await self.coordinator.async_request_refresh()
+
+
+class OvosNestedSwitch(CoordinatorEntity, SwitchEntity):
+    """Any row from const.py's own CORE_SWITCH_SETTINGS table -- one
+    generic class for all of ovos-config's deeper boolean intent-
+    pipeline settings (Padatious/OCP flags), same reasoning as
+    number.py's own OvosNestedNumber and text.py's own OvosNestedText:
+    adding a new one later is a new row in that table, not a new class.
+    """
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: OvosSharedConfigCoordinator,
+        entry: ConfigEntry,
+        path_parts: list[str],
+        name: str,
+        icon: str,
+        default: bool,
+    ) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._path_parts = path_parts
+        self._default = default
+        self._attr_name = name
+        self._attr_icon = icon
+        self._attr_unique_id = f"{entry.entry_id}_{'_'.join(path_parts)}"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)})
+
+    @property
+    def is_on(self) -> bool:
+        node = self.coordinator.data
+        for part in self._path_parts:
+            if not isinstance(node, dict) or part not in node:
+                return self._default
+            node = node[part]
+        return bool(node)
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._async_set(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._async_set(False)
+
+    async def _async_set(self, value: bool) -> None:
+        await self.hass.async_add_executor_job(
+            write_nested_config_key, self._path_parts, value
         )
         await self.coordinator.async_request_refresh()
 

@@ -22,9 +22,10 @@ from .const import (
     CONF_TIME_FORMAT, DEFAULT_TIME_FORMAT,
     CONF_SPOKEN_TIME_FORMAT, DEFAULT_SPOKEN_TIME_FORMAT,
     CONF_DATE_FORMAT, DEFAULT_DATE_FORMAT, TIME_FORMATS, DATE_FORMATS,
+    CORE_SELECT_SETTINGS,
 )
 from .coordinator import OvosSharedConfigCoordinator
-from .shared_config import write_shared_config_key
+from .shared_config import write_shared_config_key, write_nested_config_key
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities):
@@ -56,6 +57,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
             coordinator, entry, CONF_DATE_FORMAT, DEFAULT_DATE_FORMAT,
             DATE_FORMATS, "Date format", "mdi:calendar",
         ),
+    ] + [
+        OvosNestedSelect(coordinator, entry, *row)
+        for row in CORE_SELECT_SETTINGS
     ], config_subentry_id=core_settings_subentry_id)
 
 
@@ -129,6 +133,64 @@ class OvosPreferenceSelect(CoordinatorEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         await self.hass.async_add_executor_job(
             write_shared_config_key, self._conf_key, option
+        )
+        await self.coordinator.async_request_refresh()
+
+
+class OvosNestedSelect(CoordinatorEntity, SelectEntity):
+    """Any row from const.py's own CORE_SELECT_SETTINGS table -- same
+    reasoning as OvosPreferenceSelect, but for settings nested deeper
+    than one level (e.g. intents.OCP.playback_mode), using
+    write_nested_config_key instead of write_shared_config_key. Adding
+    a new one later is a new row in that table, not a new class.
+
+    `default` keeps its REAL native type from mycroft.conf (e.g.
+    playback_mode's own default is the int 0, not the string "0") --
+    confirmed by reading ovos-config's own default mycroft.conf
+    directly. SelectEntity's own options/current_option contract is
+    always strings, so this stringifies for display, but writes back
+    using type(self._default) to cast the selected string back to the
+    real type -- otherwise a selection would silently rewrite an int
+    setting as a string, and OVOS's own code comparing against the
+    literal int (e.g. `if playback_mode == 0`) would then never match.
+    """
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_device_info = DeviceInfo(identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)})
+
+    def __init__(
+        self,
+        coordinator: OvosSharedConfigCoordinator,
+        entry: ConfigEntry,
+        path_parts: list[str],
+        name: str,
+        icon: str,
+        default,
+        options: list[str],
+    ) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._path_parts = path_parts
+        self._default = default
+        self._attr_options = options
+        self._attr_name = name
+        self._attr_icon = icon
+        self._attr_unique_id = f"{entry.entry_id}_{'_'.join(path_parts)}"
+
+    @property
+    def current_option(self) -> str:
+        node = self.coordinator.data
+        for part in self._path_parts:
+            if not isinstance(node, dict) or part not in node:
+                return str(self._default)
+            node = node[part]
+        return str(node)
+
+    async def async_select_option(self, option: str) -> None:
+        value = type(self._default)(option)
+        await self.hass.async_add_executor_job(
+            write_nested_config_key, self._path_parts, value
         )
         await self.coordinator.async_request_refresh()
 

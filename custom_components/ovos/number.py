@@ -13,9 +13,9 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CORE_SETTINGS_DEVICE_ID, CONF_LATITUDE, CONF_LONGITUDE
+from .const import DOMAIN, CORE_SETTINGS_DEVICE_ID, CONF_LATITUDE, CONF_LONGITUDE, CORE_NUMBER_SETTINGS
 from .coordinator import OvosSharedConfigCoordinator
-from .shared_config import read_shared_config, write_shared_config_key
+from .shared_config import read_shared_config, write_shared_config_key, write_nested_config_key
 from .skill_settings import write_settings
 from .skill_settings_coordinator import OvosSkillSettingsCoordinator
 
@@ -31,6 +31,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
             OvosCoordinateNumber(
                 coordinator, entry, "longitude", "Longitude", "mdi:longitude", CONF_LONGITUDE
             ),
+        ] + [
+            OvosNestedNumber(coordinator, entry, *row)
+            for row in CORE_NUMBER_SETTINGS
         ],
         config_subentry_id=core_settings_subentry_id,
     )
@@ -105,6 +108,67 @@ class OvosCoordinateNumber(CoordinatorEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         await self.hass.async_add_executor_job(self._write_value, value)
+        await self.coordinator.async_request_refresh()
+
+
+class OvosNestedNumber(CoordinatorEntity, NumberEntity):
+    """Any row from const.py's own CORE_NUMBER_SETTINGS table -- one
+    generic class for all of ovos-config's deeper numeric intent-
+    pipeline settings (confidence thresholds, timeouts, ...), same
+    reasoning as text.py's own OvosNestedText: adding a new one later
+    is a new row in that table, not a new class or a new line in this
+    file's own add_entities call.
+
+    native_value walks self.coordinator.data directly, never a helper
+    that opens the shared file itself -- confirmed necessary the hard
+    way elsewhere in this project (see OvosNestedText's own docstring
+    for the actual "Detected blocking call to open... inside the event
+    loop" warning this exact pattern avoids).
+    """
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: OvosSharedConfigCoordinator,
+        entry: ConfigEntry,
+        path_parts: list[str],
+        name: str,
+        icon: str,
+        default: float,
+        min_value: float,
+        max_value: float,
+        step: float,
+    ) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._path_parts = path_parts
+        self._default = default
+        self._attr_name = name
+        self._attr_icon = icon
+        self._attr_native_min_value = min_value
+        self._attr_native_max_value = max_value
+        self._attr_native_step = step
+        self._attr_unique_id = f"{entry.entry_id}_{'_'.join(path_parts)}"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, CORE_SETTINGS_DEVICE_ID)})
+
+    @property
+    def native_value(self) -> float:
+        node = self.coordinator.data
+        for part in self._path_parts:
+            if not isinstance(node, dict) or part not in node:
+                return self._default
+            node = node[part]
+        try:
+            return float(node)
+        except (TypeError, ValueError):
+            return self._default
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self.hass.async_add_executor_job(
+            write_nested_config_key, self._path_parts, value
+        )
         await self.coordinator.async_request_refresh()
 
 

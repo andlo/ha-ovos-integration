@@ -107,3 +107,62 @@ CONF_SKILLS_EXTRA_API_URL = "ha_ovos_skills_extra_api_url"
 # escape hatch for settings this integration's own entities can't
 # cover, never a replacement for them.
 CONF_SKILL_CONFIG_TOOL_URL = "ha_ovos_skill_config_tool_url"
+
+# Declarative tables for ovos-config's own deeper intent-pipeline
+# settings (intents.adapt/padatious/common_query/OCP -- see each
+# add-on's own DOCS.md/DEVELOPER.md for the full mycroft.conf
+# investigation this is based on). Raised directly: build this so a
+# FUTURE setting is one row here, not a new class/new add_entities
+# call -- these tables are the single thing that needs editing to
+# expose one more leaf value. Each generic entity class (OvosNested*
+# in its own platform file) takes a row from the matching table
+# directly as its constructor arguments, in the same order as that
+# class's own __init__ signature.
+#
+# Deliberately NOT ovos-config's own intents.pipeline (the ordered
+# 13-stage matching sequence): that's a list defining ORDER, not a
+# leaf value, and doesn't fit any of these simple entity types --
+# raised and settled directly, not attempted here.
+#
+# Each row: (path_parts, name, icon, default, min, max, step)
+CORE_NUMBER_SETTINGS = [
+    (["intents", "adapt", "conf_high"], "Adapt confidence (high)", "mdi:gauge", 0.65, 0.0, 1.0, 0.01),
+    (["intents", "adapt", "conf_med"], "Adapt confidence (medium)", "mdi:gauge", 0.45, 0.0, 1.0, 0.01),
+    (["intents", "adapt", "conf_low"], "Adapt confidence (low)", "mdi:gauge", 0.25, 0.0, 1.0, 0.01),
+    (["intents", "padatious", "conf_high"], "Padatious confidence (high)", "mdi:gauge", 0.95, 0.0, 1.0, 0.01),
+    (["intents", "padatious", "conf_med"], "Padatious confidence (medium)", "mdi:gauge", 0.8, 0.0, 1.0, 0.01),
+    (["intents", "padatious", "conf_low"], "Padatious confidence (low)", "mdi:gauge", 0.5, 0.0, 1.0, 0.01),
+    (["intents", "common_query", "max_response_wait"], "Common Query max wait", "mdi:timer-sand", 6, 1, 60, 1),
+    (["intents", "common_query", "extension_time"], "Common Query extension time", "mdi:timer-sand", 3, 0, 30, 1),
+    (["intents", "OCP", "classifier_threshold"], "OCP classifier threshold", "mdi:gauge", 0.4, 0.0, 1.0, 0.01),
+    (["intents", "OCP", "min_score"], "OCP minimum score", "mdi:gauge", 40, 0, 100, 1),
+]
+
+# Each row: (path_parts, name, icon, default)
+CORE_SWITCH_SETTINGS = [
+    (["intents", "padatious", "stem"], "Padatious stemming", "mdi:alphabetical-variant", False),
+    (["intents", "padatious", "cast_to_ascii"], "Padatious cast to ASCII", "mdi:translate", False),
+    (["intents", "padatious", "disable_padaos"], "Padatious disable exact-match regex", "mdi:regex", False),
+    (["intents", "padatious", "domain_engine"], "Padatious domain engine", "mdi:sitemap", False),
+    (["intents", "padatious", "single_thread"], "Padatious single-threaded", "mdi:thread-lock", True),
+    (["intents", "OCP", "experimental_media_classifier"], "OCP experimental media classifier", "mdi:flask", False),
+    (["intents", "OCP", "experimental_binary_classifier"], "OCP experimental binary classifier", "mdi:flask", False),
+    (["intents", "OCP", "legacy"], "OCP legacy audio service", "mdi:history", False),
+    (["intents", "OCP", "filter_media"], "OCP filter wrong media type", "mdi:filter", True),
+    (["intents", "OCP", "filter_SEI"], "OCP filter unplayable results", "mdi:filter", True),
+    (["intents", "OCP", "search_fallback"], "OCP fall back to generic search", "mdi:magnify", True),
+]
+
+# Each row: (path_parts, name, icon, default, options) -- default
+# kept as its real native type (int 0, not string "0") -- see
+# OvosNestedSelect's own docstring in select.py for why this matters.
+CORE_SELECT_SETTINGS = [
+    (["intents", "OCP", "playback_mode"], "OCP playback mode", "mdi:play-circle-outline", 0, ["0", "10", "20"]),
+]
+
+# Each row: (path_parts, name, icon, default) -- reuses text.py's own
+# already-generic OvosNestedText directly, no new class needed.
+CORE_TEXT_SETTINGS = [
+    (["intents", "common_query", "reranker"], "Common Query reranker", "mdi:sort", "ovos-choice-solver-bm25"),
+]
+

@@ -13,7 +13,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CORE_SETTINGS_DEVICE_ID, CONF_LANG, CONF_SKILLS_API_URL, CONF_CORE_API_URL, CONF_PERSONA_API_URL, CONF_SKILLS_EXTRA_API_URL, CONF_SKILL_CONFIG_TOOL_URL
+from .const import DOMAIN, CORE_SETTINGS_DEVICE_ID, CONF_LANG, CONF_SKILLS_API_URL, CONF_CORE_API_URL, CONF_PERSONA_API_URL, CONF_SKILLS_EXTRA_API_URL, CONF_SKILL_CONFIG_TOOL_URL, CORE_TEXT_SETTINGS
 from .coordinator import OvosSharedConfigCoordinator
 from .shared_config import write_shared_config_key, write_nested_config_key
 from .skill_settings import write_settings
@@ -54,6 +54,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
             coordinator, entry, ["location", "timezone", "code"], "",
             "Timezone", "mdi:clock-time-eight-outline",
         ),
+    ] + [
+        # CORE_TEXT_SETTINGS rows are (path_parts, name, icon, default) --
+        # reordered here to match OvosNestedText's own existing
+        # (path_parts, default, name, icon) constructor signature
+        # (already used, tested, and working above) rather than
+        # changing that signature to match this table's own row order.
+        OvosNestedText(coordinator, entry, row[0], row[3], row[1], row[2])
+        for row in CORE_TEXT_SETTINGS
     ], config_subentry_id=core_settings_subentry_id)
 
 
