@@ -65,5 +65,6 @@ class OvosSkillSettingsCoordinator(DataUpdateCoordinator[dict]):
                     "source_type": source_type,
                     "source": skill.get("source", ""),
                     "package_name": package_name,
+                    "active": skill.get("active", True),
                 }
         return result

@@ -138,6 +138,26 @@ def write_settings(api_url: str, skill_id: str, settings: dict) -> bool:
         return False
 
 
+def set_skill_active(api_url: str, skill_id: str, active: bool) -> bool:
+    """Enable/disable an already-installed skill via ovos-skills' own
+    GET/PUT /skills/{skill_id}/active -- confirmed working end-to-end
+    against a real skill's own process (skillmanager.activate/
+    deactivate on the shared bus, see that add-on's own DOCS.md).
+    Distinct from a skill's own boolean settings.json fields
+    (write_settings above): this disables the skill entirely rather
+    than changing one of its own settings.
+    """
+    try:
+        resp = requests.put(
+            f"{api_url}/skills/{skill_id}/active",
+            json={"active": active},
+            timeout=REQUEST_TIMEOUT,
+        )
+        return resp.status_code == 200
+    except requests.RequestException:
+        return False
+
+
 def prettify_skill_id(skill_id: str) -> str:
     """Last-resort display name when no catalog entry and no subentry
     title exist for a skill (always true for ovos-skills-extra

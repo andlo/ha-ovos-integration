@@ -31,7 +31,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN, CORE_SETTINGS_DEVICE_ID, CONF_CONFIRM_LISTENING, DEFAULT_CONFIRM_LISTENING, CORE_SWITCH_SETTINGS
 from .coordinator import OvosSharedConfigCoordinator
 from .shared_config import write_shared_config_key, write_nested_config_key
-from .skill_settings import write_settings
+from .skill_settings import write_settings, set_skill_active
 from .skill_settings_coordinator import OvosSkillSettingsCoordinator
 
 
@@ -63,7 +63,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
     }
 
     for skill_id, skill_data in coordinator.data.items():
-        entities = [
+        entities = [OvosSkillActiveSwitch(coordinator, skill_id)] + [
             OvosSkillSettingSwitch(
                 coordinator, subentry_by_skill.get(skill_id, skill_id), skill_id, field["name"]
             )
@@ -163,6 +163,52 @@ class OvosNestedSwitch(CoordinatorEntity, SwitchEntity):
     async def _async_set(self, value: bool) -> None:
         await self.hass.async_add_executor_job(
             write_nested_config_key, self._path_parts, value
+        )
+        await self.coordinator.async_request_refresh()
+
+
+class OvosSkillActiveSwitch(CoordinatorEntity, SwitchEntity):
+    """Enable/disable this installed skill entirely -- ovos-skills' own
+    GET/PUT /skills/{skill_id}/active, sending skillmanager.activate/
+    deactivate on the shared bus (confirmed working end-to-end against
+    a real skill's own process, see that add-on's own DOCS.md). Genuinely
+    different from OvosSkillSettingSwitch below: this disables the
+    skill entirely (its own process keeps running but stops responding
+    to intents), not one of its own settings.json fields.
+
+    One created per installed skill regardless of whether it has any
+    boolean settings.json fields of its own -- every skill can be
+    turned off, not just ones that happen to have a checkbox setting.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Active"
+    _attr_icon = "mdi:puzzle"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator: OvosSkillSettingsCoordinator, skill_id: str) -> None:
+        super().__init__(coordinator)
+        self._skill_id = skill_id
+        self._attr_unique_id = f"{skill_id}_active"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, skill_id)})
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.coordinator.data.get(self._skill_id, {}).get("active", True))
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._async_set(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._async_set(False)
+
+    async def _async_set(self, value: bool) -> None:
+        skill_data = self.coordinator.data.get(self._skill_id, {})
+        api_url = skill_data.get("api_url")
+        if not api_url:
+            return
+        await self.hass.async_add_executor_job(
+            set_skill_active, api_url, self._skill_id, value
         )
         await self.coordinator.async_request_refresh()
 
