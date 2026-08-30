@@ -286,10 +286,39 @@ async def _async_create_missing_skill_subentries(
         if curated_url else {}
     )
 
+    # Retroactive fix, once: a subentry whose own title is still
+    # exactly what auto-creation would have produced before this
+    # integration's own skill.get("name") fallback existed -- either
+    # the raw skill_id itself, or prettify_skill_id's own crude guess
+    # -- never got a real name. Confirmed both cases happen for real:
+    # a skill installed directly against an add-on's own API sometimes
+    # ends up with the bare skill_id as its title, other times with
+    # prettify_skill_id's guess, depending on which code path created
+    # it. Only retitles those two exact "never really set" cases, never
+    # touches any other title -- including one a person may have
+    # deliberately renamed to something else, which this must not
+    # overwrite.
+    for subentry_id, subentry in list(entry.subentries.items()):
+        if subentry.subentry_type != "skill":
+            continue
+        skill_id = subentry.data.get("skill_id")
+        skill = skill_settings_coordinator.data.get(skill_id)
+        if not skill or subentry.title not in (skill_id, prettify_skill_id(skill_id)):
+            continue
+        better_title = catalog_names.get(skill_id) or skill.get("name")
+        if better_title and better_title != subentry.title:
+            hass.config_entries.async_update_subentry(entry, subentry, title=better_title)
+
     for skill_id, skill in skill_settings_coordinator.data.items():
         if skill_id in existing_skill_ids:
             continue
-        title = catalog_names.get(skill_id) or prettify_skill_id(skill_id)
+        # skill.get("name") -- the add-on's own /skills response now
+        # includes this when the skill ships a skill.json (see
+        # sensor.py's own comment on the same fallback for its device
+        # naming). Placed here too so a skill auto-subentried for the
+        # first time gets a real name as its subentry's own title
+        # immediately, not just prettify_skill_id's crude guess.
+        title = catalog_names.get(skill_id) or skill.get("name") or prettify_skill_id(skill_id)
         try:
             await hass.config_entries.subentries.async_init(
                 (entry.entry_id, "skill"),

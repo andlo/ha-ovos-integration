@@ -140,7 +140,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
 
     for skill_id, skill in installed.items():
         subentry_id, subentry_title = subentry_by_skill.get(skill_id, (None, None))
-        name = subentry_title or catalog_names.get(skill_id) or prettify_skill_id(skill_id)
+        # skill.get("name") -- the add-on's own /skills response now
+        # includes this when the skill ships a skill.json (a per-locale
+        # metadata file many modern OVOS skills carry), read directly
+        # by the add-on itself since only it has filesystem access to
+        # the installed package. Confirmed real for a skill installed
+        # via ovos-skills-extra (which, unlike ovos-skills, has no
+        # catalog of its own at all -- see fetch_catalog_names' own
+        # docstring): without this, that add-on's own skills had
+        # nothing better than prettify_skill_id's crude guess.
+        name = (
+            subentry_title
+            or catalog_names.get(skill_id)
+            or skill.get("name")
+            or prettify_skill_id(skill_id)
+        )
 
         # via_device (the hub fallback) is ONLY relevant when this skill
         # has no subentry at all -- a skill WITH one is already properly
