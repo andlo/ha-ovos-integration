@@ -247,6 +247,8 @@ TRANSPORT_HIVEMIND = "hivemind"
 CONF_DEVICE_ID = "device_id"
 CONF_NAME = "name"
 CONF_USER_ID = "user_id"
+# a satellite's hub (#12): the device_id of the OVOS it is a HiveMind satellite of
+CONF_VIA_DEVICE = "via_device"
 CONF_MODEL = "model"
 CONF_MANUFACTURER = "manufacturer"
 CONF_SW_VERSION = "sw_version"

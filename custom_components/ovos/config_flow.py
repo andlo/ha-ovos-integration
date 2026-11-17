@@ -23,6 +23,7 @@ from .const import (
     CONF_SW_VERSION,
     CONF_TRANSPORT,
     CONF_USER_ID,
+    CONF_VIA_DEVICE,
     ENTRY_TYPE_ADDONS,
     ENTRY_TYPE_DEVICE,
     ENTRY_TYPE_INBOUND,
@@ -114,6 +115,9 @@ class OvosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured()
         self._discovered = discovery_info
         self.context["title_placeholders"] = {"name": discovery_info[CONF_NAME]}
+        if discovery_info.get(CONF_VIA_DEVICE):
+            # a satellite its (accepted) hub paired: no second question (#12)
+            return await self.async_step_discovery_confirm(user_input={})
         return await self.async_step_discovery_confirm()
 
     async def async_step_discovery_confirm(self, user_input=None):
@@ -124,7 +128,7 @@ class OvosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_TRANSPORT: TRANSPORT_INBOUND,
                 **{k: info.get(k) for k in (
                     CONF_DEVICE_ID, CONF_NAME, CONF_USER_ID,
-                    CONF_MODEL, CONF_MANUFACTURER, CONF_SW_VERSION,
+                    CONF_MODEL, CONF_MANUFACTURER, CONF_SW_VERSION, CONF_VIA_DEVICE,
                 ) if info.get(k) is not None},
             })
         return self.async_show_form(

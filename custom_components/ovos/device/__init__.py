@@ -14,6 +14,7 @@ from ..const import (
     CONF_MANUFACTURER,
     CONF_MODEL,
     CONF_SW_VERSION,
+    CONF_VIA_DEVICE,
     DATA_DEVICES,
     DATA_INBOUND_HUB,
     DOMAIN,
@@ -33,6 +34,8 @@ async def async_setup_device_entry(hass: HomeAssistant, entry: ConfigEntry) -> b
         manufacturer=entry.data.get(CONF_MANUFACTURER) or "OpenVoiceOS",
         model=entry.data.get(CONF_MODEL) or "OpenVoiceOS",
         sw_version=entry.data.get(CONF_SW_VERSION),
+        # a satellite shows as connected via its hub (#12)
+        via_device=(DOMAIN, via) if (via := entry.data.get(CONF_VIA_DEVICE)) else None,
     )
     hass.data[DOMAIN][DATA_DEVICES][device.device_id] = device
     entry.runtime_data = device

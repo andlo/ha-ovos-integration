@@ -126,6 +126,27 @@ minutes" – it says when it's done), the wake word chosen in HA from the ones
 the device has, and a `media_player` for its speaker (sounds, radio and
 music from HA). See [protocol.md](protocol.md#5-as-an-assist-satellite).
 
+## A hub and its satellites
+
+An OVOS with hivemind-core – [Emkay Home](https://github.com/emkay-voice/emkay-home),
+or any HiveMind master – brings its satellites along when it is linked to HA
+(ovos-phal-plugin-ha-link): the kitchen tablet, the bedroom phone, a
+hivemind-voice-sat on a Pi. Each becomes its own device, **connected via**
+the hub, with its own volume, listening on/off, state and "say" – so an
+automation can turn off listening in the bedroom at night without touching
+the kitchen.
+
+- A satellite comes in by itself the first time it connects to the hub (no
+  "new device found" to accept: the hub was accepted, and it paired the
+  satellite). Its name is the one it has in the hub.
+- It is unavailable while it isn't connected to the hub, and its device goes
+  when it is removed from the hub.
+- A satellite has to be allowed to answer: hivemind-core only puts the message
+  types a client is allowed on the hub's bus. Emkay Home allows its Emkays the
+  answers HA needs (`mycroft.volume.get.response`,
+  `mycroft.mic.get_status.response`, …); for another hivemind-core, add them
+  with `hivemind-core allow-msg`.
+
 ## Night mode
 
 ```yaml

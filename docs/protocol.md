@@ -207,6 +207,35 @@ What HA uses today: `GET /config/quick`, `POST /config/quick`, `GET /health`,
 [ovos-phal-plugin-ha-link](https://github.com/andlo/ovos-phal-plugin-ha-link)
 does the device's side on an ordinary OVOS.
 
+## 7. A hub and its satellites
+
+An OVOS that is a HiveMind master (Emkay Home, any hivemind-core with
+satellites) can bring its satellites to HA as devices of their own, on its
+own connection. HA doesn't have to be a HiveMind client, and a satellite
+doesn't log in to HA itself.
+
+- Once the hub has had `ready`, it sends one more `ovos/connect` per satellite
+  on the same WebSocket connection, with `"via_device": "<the hub's device_id>"`
+  and the satellite's own `device_id` and `name`. The first time, HA adds it at
+  once (the hub was accepted, and it paired this one itself), shown as
+  connected via the hub. Everything else is as for any device: its events come
+  on its own subscription, and `ovos/bus` with its `device_id` carries its
+  messages.
+- When the satellite disconnects from the hub, the hub ends its subscription
+  (`unsubscribe_events`): it is unavailable in HA until it is back.
+- When the satellite is removed from the hub (unpaired), the hub sends
+  `{"type": "ovos/forget", "device_id": "<the satellite's>"}` and its device
+  goes from HA.
+
+A `via_device` is only accepted for a hub that is connected and accepted on
+the same connection; `ovos/forget` only for a satellite of such a hub.
+
+[ovos-phal-plugin-ha-link](https://github.com/andlo/ovos-phal-plugin-ha-link)
+does this on a hivemind-core master: it follows `hive.client.connect` /
+`hive.client.disconnect`, tells a satellite's messages apart by its peer
+(`context["source"]` / `context["destination"]`), and sends what HA asks of a
+satellite with `hive.send.downstream`.
+
 ## Versions
 
 The protocol number goes up only for changes an older client can't live with.
