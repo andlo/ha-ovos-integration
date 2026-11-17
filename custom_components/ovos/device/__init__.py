@@ -20,7 +20,7 @@ from ..const import (
 )
 from .bus import OvosDevice
 
-DEVICE_PLATFORMS = ["assist_satellite", "binary_sensor", "button", "media_player",
+DEVICE_PLATFORMS = ["assist_satellite", "binary_sensor", "button", "event", "media_player",
                     "notify", "number", "select", "sensor", "switch"]
 
 

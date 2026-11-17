@@ -9,7 +9,7 @@ from typing import Any
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 
 from ..const import DOMAIN
-from .bus import STATES, OvosDevice
+from .bus import CAP_NETLOG, STATES, OvosDevice
 from .entity import CAP_BASE, OvosDeviceEntity, setup_capabilities
 
 
@@ -17,6 +17,8 @@ def _entities(device: OvosDevice, cap: str) -> list:
     if cap == CAP_BASE:
         return [OvosState(device), OvosText(device, "last_question"),
                 OvosText(device, "last_answer")]
+    if cap == CAP_NETLOG:
+        return [OvosContactedToday(device), OvosLastContacted(device)]
     if cap.startswith("sensor:"):
         sid = cap.removeprefix("sensor:")
         if sid in device.sensors and not device.sensors[sid]["binary"]:
@@ -48,6 +50,41 @@ class OvosText(OvosDeviceEntity, SensorEntity):
     @property
     def native_value(self) -> str | None:
         return getattr(self.device, self._attr_translation_key)
+
+
+class OvosContactedToday(OvosDeviceEntity, SensorEntity):
+    """How many requests went out today, and to which services (#16)."""
+
+    _attr_state_class = "total_increasing"   # starts again at midnight
+    _attr_native_unit_of_measurement = "requests"
+
+    def __init__(self, device: OvosDevice) -> None:
+        super().__init__(device, "contacted_today")
+
+    @property
+    def native_value(self) -> int:
+        return self.device.net_count
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"services": dict(sorted(self.device.net_services.items(),
+                                        key=lambda kv: -kv[1]))}
+
+
+class OvosLastContacted(OvosDeviceEntity, SensorEntity):
+    """The last host the device contacted, and who asked (#16)."""
+
+    def __init__(self, device: OvosDevice) -> None:
+        super().__init__(device, "last_contacted")
+
+    @property
+    def native_value(self) -> str | None:
+        return (self.device.net_last or {}).get("host")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        last = self.device.net_last or {}
+        return {k: last.get(k) for k in ("service", "who", "kind", "method", "status", "bytes")}
 
 
 class OvosPhalSensorBase(OvosDeviceEntity):
