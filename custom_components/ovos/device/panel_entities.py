@@ -1,13 +1,14 @@
 """The control panel's settings as entities (#15). See panel.py."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.components.button import ButtonEntity
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.components.select import SelectEntity
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.components.text import TextEntity, TextMode
 from homeassistant.const import EntityCategory
@@ -210,7 +211,7 @@ def binary_sensors(device: OvosDevice, cap: str) -> list:
 
 
 def sensors(device: OvosDevice, cap: str) -> list:
-    return [PanelUpdates(device)] if cap == CAP_PANEL else []
+    return [PanelUpdates(device), PanelLastBackup(device)] if cap == CAP_PANEL else []
 
 
 # --- actions -------------------------------------------------------------------
@@ -230,10 +231,58 @@ class PanelAction(PanelEntity, ButtonEntity):
         await self.coordinator.client.request("POST", f"/system/{self._action}")
 
 
+class PanelBackup(PanelEntity, ButtonEntity):
+    """The panel's archive of the device's settings, kept in /config/ovos_backups."""
+
+    _attr_icon = "mdi:backup-restore"
+
+    def __init__(self, device: OvosDevice) -> None:
+        super().__init__(device, "panel_backup")
+        self._attr_translation_key = None
+        self._attr_name = "Take backup"
+
+    @property
+    def available(self) -> bool:
+        return self.device.available
+
+    async def async_press(self) -> None:
+        await self.coordinator.take_backup()
+
+
+class PanelLastBackup(PanelEntity, SensorEntity):
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, device: OvosDevice) -> None:
+        super().__init__(device, "panel_last_backup")
+        self._attr_translation_key = None
+        self._attr_name = "Last backup"
+
+    @property
+    def available(self) -> bool:
+        return True     # the files are in HA, whether the device is on or not
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self.coordinator.last_backup is None:
+            await self.coordinator.async_find_last_backup()
+            self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> datetime | None:
+        return self.coordinator.last_backup_at
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        path = self.coordinator.last_backup
+        return {"file": str(path)} if path else {}
+
+
 def buttons(device: OvosDevice, cap: str) -> list:
     if cap != CAP_PANEL:
         return []
-    return [PanelAction(device, "restart_services"), PanelAction(device, "reboot")]
+    return [PanelAction(device, "restart_services"), PanelAction(device, "reboot"),
+            PanelBackup(device)]
 
 
 # --- skills on/off ---------------------------------------------------------------
