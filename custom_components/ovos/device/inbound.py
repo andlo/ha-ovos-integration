@@ -42,6 +42,7 @@ from ..const import (
     CONF_NAME,
     CONF_SW_VERSION,
     CONF_USER_ID,
+    CONF_VIA_DEVICE,
     DATA_DEVICES,
     DATA_INBOUND_HUB,
     DOMAIN,
@@ -81,6 +82,15 @@ CONNECT_SCHEMA = {
     # and where a browser can open it, if anywhere
     vol.Optional("panel"): bool,
     vol.Optional("panel_url"): vol.All(str, vol.Length(max=200)),
+    # a satellite of a hub (a HiveMind master such as Emkay Home), announced
+    # by the hub on the hub's own connection (#12): the hub's device_id
+    vol.Optional("via_device"): vol.All(str, vol.Length(min=8, max=64),
+                                        vol.Match(r"^[A-Za-z0-9_.:-]+$")),
+}
+
+FORGET_SCHEMA = {
+    vol.Required("type"): "ovos/forget",
+    vol.Required("device_id"): str,
 }
 
 BUS_SCHEMA = {
@@ -224,6 +234,21 @@ async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnec
                               "this device belongs to another user")
         return
 
+    via = msg.get("via_device")
+    if via is not None:
+        # only the hub itself, already accepted and on this same connection,
+        # may bring in its satellites
+        hub_conn = hub.connections.get(via)
+        if (via == device_id or hub_conn is None or hub_conn.connection is not connection
+                or _find_entry(hass, via) is None):
+            connection.send_error(msg["id"], "unknown_hub",
+                                  "connect the hub (via_device) on this connection first")
+            return
+        if entry is not None and entry.data.get(CONF_VIA_DEVICE) != via:
+            connection.send_error(msg["id"], websocket_api.ERR_UNAUTHORIZED,
+                                  "this device is not a satellite of that hub")
+            return
+
     info = {k: v for k, v in msg.items() if k not in ("id", "type", "protocol")}
     conn = InboundConnection(connection, msg["id"], info)
     if (old := hub.connections.get(device_id)) is not None:
@@ -235,19 +260,24 @@ async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnec
 
     if entry is None:
         conn.send_event({"type": "pending"})
-        discovery_flow.async_create_flow(
-            hass, DOMAIN,
-            context={"source": SOURCE_INTEGRATION_DISCOVERY},
-            data={
-                CONF_DEVICE_ID: device_id,
-                CONF_NAME: msg["name"],
-                CONF_USER_ID: connection.user.id,
-                CONF_MODEL: msg.get("model"),
-                CONF_MANUFACTURER: msg.get("manufacturer"),
-                CONF_SW_VERSION: msg.get("sw_version"),
-                "user_name": connection.user.name,
-            },
-        )
+        data = {
+            CONF_DEVICE_ID: device_id,
+            CONF_NAME: msg["name"],
+            CONF_USER_ID: connection.user.id,
+            CONF_MODEL: msg.get("model"),
+            CONF_MANUFACTURER: msg.get("manufacturer"),
+            CONF_SW_VERSION: msg.get("sw_version"),
+            "user_name": connection.user.name,
+        }
+        if via is not None:
+            # the hub was accepted, and it paired this one itself: added at
+            # once, no second "new device found" to click
+            data[CONF_VIA_DEVICE] = via
+            hass.async_create_task(hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": SOURCE_INTEGRATION_DISCOVERY}, data=data))
+        else:
+            discovery_flow.async_create_flow(
+                hass, DOMAIN, context={"source": SOURCE_INTEGRATION_DISCOVERY}, data=data)
         return
 
     if hass.data[DOMAIN][DATA_DEVICES].get(device_id) is None:
@@ -269,6 +299,23 @@ def ws_bus(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
     device: OvosDevice | None = hass.data[DOMAIN][DATA_DEVICES].get(msg["device_id"])
     if device is not None and device.transport is conn:
         device.handle_message(msg["message"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(FORGET_SCHEMA)
+@websocket_api.async_response
+async def ws_forget(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
+                    msg: dict) -> None:
+    """A hub removed one of its satellites (it was unpaired): its device goes too."""
+    hub: InboundHub = hass.data[DOMAIN][DATA_INBOUND_HUB]
+    entry = _find_entry(hass, msg["device_id"])
+    via = entry.data.get(CONF_VIA_DEVICE) if entry else None
+    hub_conn = hub.connections.get(via) if via else None
+    if entry is None or hub_conn is None or hub_conn.connection is not connection:
+        connection.send_error(msg["id"], websocket_api.ERR_NOT_FOUND,
+                              "not a satellite of a hub on this connection")
+        return
+    await hass.config_entries.async_remove(entry.entry_id)
     connection.send_result(msg["id"])
 
 
@@ -304,3 +351,4 @@ def async_setup_inbound(hass: HomeAssistant) -> None:
     async_setup_satellite_ws(hass)
     websocket_api.async_register_command(hass, ws_connect)
     websocket_api.async_register_command(hass, ws_bus)
+    websocket_api.async_register_command(hass, ws_forget)
