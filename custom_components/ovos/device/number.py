@@ -4,13 +4,20 @@ from __future__ import annotations
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.const import PERCENTAGE
 
+from . import panel_entities
 from .bus import CAP_VOLUME, OvosDevice
 from .entity import OvosDeviceEntity, setup_capabilities
+from .panel import CAP_PANEL
 
 
 async def async_setup_entry(hass, entry, add_entities):
-    setup_capabilities(hass, entry, add_entities, lambda device, cap:
-                       [OvosVolume(device)] if cap == CAP_VOLUME else [])
+    def factory(device: OvosDevice, cap: str) -> list:
+        if cap == CAP_PANEL:
+            # skills' number settings (#15)
+            panel_entities.setup_skill_settings(device, add_entities, "number")
+            return []
+        return [OvosVolume(device)] if cap == CAP_VOLUME else []
+    setup_capabilities(hass, entry, add_entities, factory)
 
 
 class OvosVolume(OvosDeviceEntity, NumberEntity):

@@ -30,6 +30,7 @@ async def async_setup_entry(hass, entry, add_entities):
         if cap == CAP_PANEL:
             # a switch per skill, as the panel reports them (#15)
             panel_entities.setup_skill_switches(device, add_entities)
+            panel_entities.setup_skill_settings(device, add_entities, "switch")
             return []
         return _entities(device, cap)
     setup_capabilities(hass, entry, add_entities, factory)
