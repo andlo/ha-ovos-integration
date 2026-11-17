@@ -1,12 +1,17 @@
 {
   "domain": "ovos",
   "name": "OpenVoiceOS",
-  "version": "0.0.41",
+  "version": "0.1.0",
   "config_flow": true,
   "documentation": "https://github.com/andlo/ha-ovos-integration",
   "issue_tracker": "https://github.com/andlo/ha-ovos-integration/issues",
-  "codeowners": ["@andlo"],
-  "iot_class": "local_polling",
-  "dependencies": ["conversation"],
+  "codeowners": [
+    "@andlo"
+  ],
+  "iot_class": "local_push",
+  "dependencies": [
+    "conversation",
+    "websocket_api"
+  ],
   "requirements": []
 }

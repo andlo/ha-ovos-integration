@@ -212,3 +212,58 @@ CORE_LIST_SETTINGS = [
     (["skills", "fallbacks", "fallback_blacklist"], "Fallback blacklist", "mdi:cancel", []),
 ]
 
+
+
+# --- General OVOS devices (issue #7) ---------------------------------------
+#
+# Since #7 the integration has two kinds of config entries under the same
+# `ovos` domain:
+#
+#   addons  the shared config of haos-ovos-addons (everything above) -- one
+#           entry, as before; entries from before #7 are migrated to it
+#   device  one OpenVoiceOS device, spoken to over the OVOS bus, whatever
+#           kind of OVOS it is (ovos-installer, raspOVOS, Mark II, Emkay...)
+#
+# A device entry has a transport: how its bus reaches HA.
+#
+#   inbound   the device connects to HA's WebSocket API (#9) -- browsers like
+#             Emkay, devices behind NAT
+#   hivemind  HA connects to the device's hivemind-core (#8) -- not yet
+
+CONF_ENTRY_TYPE = "entry_type"
+ENTRY_TYPE_ADDONS = "addons"
+ENTRY_TYPE_DEVICE = "device"
+# "Let OpenVoiceOS devices connect to this Home Assistant" (#9): an opt-in,
+# and what makes HA load the integration (and its WebSocket commands) when
+# there is no other entry yet -- the first device has nothing to talk to
+# otherwise
+ENTRY_TYPE_INBOUND = "inbound"
+INBOUND_UNIQUE_ID = "inbound"
+
+CONF_TRANSPORT = "transport"
+TRANSPORT_INBOUND = "inbound"
+TRANSPORT_HIVEMIND = "hivemind"
+
+CONF_DEVICE_ID = "device_id"
+CONF_NAME = "name"
+CONF_USER_ID = "user_id"
+CONF_MODEL = "model"
+CONF_MANUFACTURER = "manufacturer"
+CONF_SW_VERSION = "sw_version"
+
+# unique_id of the one add-on entry, so a device entry never blocks it
+ADDONS_UNIQUE_ID = "addons"
+
+# The inbound WebSocket protocol (docs/protocol.md). Bumped only for changes
+# an older client can't live with; a client says which it speaks in
+# ovos/connect, and the integration answers with the one it speaks.
+PROTOCOL_VERSION = 1
+SUPPORTED_PROTOCOLS = (1,)
+
+# Where the integration's own runtime objects live in hass.data[DOMAIN]
+DATA_INBOUND_HUB = "_inbound_hub"
+DATA_DEVICES = "_devices"
+
+# Dispatcher signal: a device found a new capability (#10); formatted with
+# the entry id
+SIGNAL_NEW_CAPABILITY = "ovos_new_capability_{}"

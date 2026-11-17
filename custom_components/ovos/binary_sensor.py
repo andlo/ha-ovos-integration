@@ -8,6 +8,8 @@ this replaces, is removed).
 """
 from __future__ import annotations
 
+from .device import binary_sensor as device_platform  # issue #7
+
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -20,6 +22,8 @@ from .persona_coordinator import OvosPersonaCoordinator
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities):
+    if entry.data.get("entry_type") == "device":  # issue #7: a device entry
+        return await device_platform.async_setup_entry(hass, entry, add_entities)
     coordinator: OvosPersonaCoordinator = hass.data[DOMAIN][f"{entry.entry_id}_persona"]
     persona_subentry_id = hass.data[DOMAIN][f"{entry.entry_id}_persona_subentry"]
     add_entities(

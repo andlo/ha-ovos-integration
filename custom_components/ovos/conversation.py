@@ -66,6 +66,8 @@ def _get_lang_fallback() -> str:
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, add_entities: AddEntitiesCallback
 ) -> None:
+    if entry.data.get("entry_type") == "device":  # issue #7: nothing here for devices
+        return
     add_entities([OvosConversationAgent(entry)])
 
 

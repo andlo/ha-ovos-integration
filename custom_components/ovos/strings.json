@@ -3,6 +3,14 @@
     "step": {
       "user": {
         "title": "OpenVoiceOS",
+        "description": "What do you want to add?",
+        "menu_options": {
+          "addons": "The OpenVoiceOS add-ons on this Home Assistant (haos-ovos-addons)",
+          "device": "An OpenVoiceOS device"
+        }
+      },
+      "addons": {
+        "title": "OpenVoiceOS add-ons (haos-ovos-addons)",
         "description": "Pre-filled from your Home Assistant settings where possible — edit anything that doesn't match what you want OVOS to use.",
         "data": {
           "lang": "Language",
@@ -11,11 +19,22 @@
           "timezone": "Timezone",
           "system_unit": "System unit"
         }
+      },
+      "discovery_confirm": {
+        "title": "New OpenVoiceOS device",
+        "description": "**{name}** ({model}) wants to join Home Assistant, logged in as {user}.\n\nAdd it? It gets a device here with its volume, listening, state and whatever else it can do, and automations can make it speak."
+      },
+      "device": {
+        "title": "Let OpenVoiceOS devices connect",
+        "description": "OpenVoiceOS devices that can't be reached from Home Assistant – Emkay in a browser, devices behind NAT – connect to Home Assistant themselves, logged in as a Home Assistant user.\n\nAllow that? Each device that connects is then shown under **Discovered**, and only becomes a device here when you add it."
       }
     },
     "abort": {
-      "already_configured": "Already configured — only one shared config entry is needed."
-    }
+      "already_configured": "Already configured.",
+      "already_in_progress": "This device is already waiting to be added.",
+      "device_connects_itself": "OpenVoiceOS devices may already connect to this Home Assistant. A device adds itself: point it at this Home Assistant (in Emkay: ⚙ → “Where should Emkay think?” → Home Assistant; for any other OVOS, tools/ovos_ha_bridge.py in the integration's repository) and log in. It then shows up under **Discovered**, ready to add. Connecting to a device over HiveMind is coming (issue #8)."
+    },
+    "flow_title": "{name}"
   },
   "config_subentries": {
     "skill": {
@@ -107,6 +126,96 @@
       },
       "abort": {
         "already_configured": "There's already one Persona device -- it holds the solver list, reachability, and fallback-skill button, and is created automatically. Find it under this integration's own devices rather than adding another."
+      }
+    }
+  },
+  "entity": {
+    "number": {
+      "volume": {
+        "name": "Volume"
+      }
+    },
+    "switch": {
+      "speaker_mute": {
+        "name": "Mute speaker"
+      },
+      "listening": {
+        "name": "Listening"
+      },
+      "local_only": {
+        "name": "Local only"
+      },
+      "keep_awake": {
+        "name": "Keep screen on"
+      }
+    },
+    "button": {
+      "listen": {
+        "name": "Listen now"
+      },
+      "stop": {
+        "name": "Stop"
+      }
+    },
+    "notify": {
+      "say": {
+        "name": "Say"
+      }
+    },
+    "sensor": {
+      "state": {
+        "name": "State",
+        "state": {
+          "idle": "Idle",
+          "listening": "Listening",
+          "thinking": "Thinking",
+          "speaking": "Speaking",
+          "sleeping": "Sleeping"
+        }
+      },
+      "last_question": {
+        "name": "Last question"
+      },
+      "last_answer": {
+        "name": "Last answer"
+      }
+    }
+  },
+  "services": {
+    "ask": {
+      "name": "Ask",
+      "description": "Ask an OpenVoiceOS device something, as if it had been said to it.",
+      "fields": {
+        "device_id": {
+          "name": "Device",
+          "description": "The OpenVoiceOS device(s) to ask."
+        },
+        "utterance": {
+          "name": "Utterance",
+          "description": "What to ask."
+        },
+        "lang": {
+          "name": "Language",
+          "description": "Language of the utterance; the device's own when empty."
+        }
+      }
+    },
+    "send_message": {
+      "name": "Send bus message",
+      "description": "Send any OVOS bus message to an OpenVoiceOS device.",
+      "fields": {
+        "device_id": {
+          "name": "Device",
+          "description": "The OpenVoiceOS device(s)."
+        },
+        "type": {
+          "name": "Message type",
+          "description": "The bus message type."
+        },
+        "data": {
+          "name": "Data",
+          "description": "The message's data."
+        }
       }
     }
   }

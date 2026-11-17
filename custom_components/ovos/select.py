@@ -29,6 +29,8 @@ from .shared_config import write_shared_config_key, write_nested_config_key
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities):
+    if entry.data.get("entry_type") == "device":  # issue #7: nothing here for devices
+        return
     coordinator: OvosSharedConfigCoordinator = hass.data[DOMAIN][entry.entry_id]
     core_settings_subentry_id = hass.data[DOMAIN][f"{entry.entry_id}_core_settings_subentry"]
     add_entities([
