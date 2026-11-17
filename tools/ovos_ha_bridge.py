@@ -28,6 +28,7 @@ import json
 import logging
 from pathlib import Path
 import platform
+import time
 import uuid
 
 import aiohttp
@@ -226,6 +227,13 @@ class Bridge:
             "attributes": {"unit_of_measurement": "%", "device_class": "battery"}}})
         await self.to_ha({"type": "ovos.phal.binary_sensor", "data": {
             "sensor_id": "charging", "name": "Charging", "state": True}})
+        # two requests "sent out", as a network log would report them (#16)
+        for host, kind, service, who in (
+                ("stt.openvoiceos.pt", "stt", "speech recognition (OpenVoiceOS server)", "ovos-stt-plugin-server"),
+                ("da.wikipedia.org", "wikipedia", "Wikipedia", "ovos-skill-wikipedia")):
+            await self.to_ha({"type": "ovos.network.request", "data": {
+                "t": int(time.time() * 1000), "host": host, "method": "GET", "status": 200,
+                "bytes": 512, "who": who, "kind": kind, "service": service}})
 
 
 def main() -> None:

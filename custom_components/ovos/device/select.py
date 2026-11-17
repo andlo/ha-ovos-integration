@@ -8,11 +8,15 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from ..const import DOMAIN
 from .assist_satellite import CAP_SATELLITE
 from .bus import OvosDevice
+from . import panel_entities
 from .entity import setup_capabilities
+from .panel import CAP_PANEL
 
 
 async def async_setup_entry(hass, entry, add_entities):
     def factory(device: OvosDevice, cap: str):
+        if cap == CAP_PANEL:
+            return panel_entities.selects(device, cap)
         if cap != CAP_SATELLITE:
             return []
         info = DeviceInfo(identifiers={(DOMAIN, device.device_id)})

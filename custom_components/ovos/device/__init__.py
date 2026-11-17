@@ -20,8 +20,8 @@ from ..const import (
 )
 from .bus import OvosDevice
 
-DEVICE_PLATFORMS = ["assist_satellite", "binary_sensor", "button", "media_player",
-                    "notify", "number", "select", "sensor", "switch"]
+DEVICE_PLATFORMS = ["assist_satellite", "binary_sensor", "button", "event", "media_player",
+                    "notify", "number", "select", "sensor", "switch", "text"]
 
 
 async def async_setup_device_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

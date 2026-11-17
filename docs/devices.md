@@ -42,6 +42,47 @@ every change, so changes by voice show up in HA); mic in ovos-dinkum-listener.
 Note: ovos-PHAL-plugin-alsa only obeys messages in the device's own session.
 HA sends without a session, which OVOS treats as the default (the device's own).
 
+## The control panel's settings
+
+A device whose link offers its [ovos-control-panel](https://github.com/OpenVoiceOS/ovos-control-panel)
+(`panel: true`; ovos-phal-plugin-ha-link does it on an ordinary OVOS) also gets
+what the panel can set. The panel itself does the reading and writing (your
+own layer of `mycroft.conf` only, a backup on every save), through the
+device's connection, so the panel is never opened on the network:
+
+| Entity | Panel |
+|---|---|
+| `text` **Language** | `lang` |
+| `select` **Units**, **Time format**, **Date format** | the Simple tab |
+| `select` **Voice**, **Speech to text**, **Wake word**, **Voice activity detection** | the plugins and wake words the device has |
+| `switch` per skill | the skill on or off (`skills.blacklisted_skills`) |
+| `binary_sensor` **Problem** | the dashboard: the bus or an essential service not answering |
+| `sensor` **Updates available** | OVOS packages with a newer version on the device's channel |
+| `button` **Restart OVOS**, **Reboot** | the panel's system actions (they need the panel's token) |
+
+## The network log
+
+A device that tells what it sends out on the network, one
+`ovos.network.request` per request, gets:
+
+| Entity | |
+|---|---|
+| `event` **Network request** | fires for every request; the event type is the kind of service (`stt`, `tts`, `wikipedia`, `weather`, `models`, …, `other`), with `host`, `method`, `status`, `bytes`, `who` (the package that asked) and `service` as attributes. It shows in the logbook, and automations can trigger on it |
+| `sensor` **Contacted today** | how many requests went out today, with the services and how many times each (`services` attribute); the device's own site files don't count |
+| `sensor` **Last contacted** | the last host, with who asked and the service |
+
+The message carries the same fields as a line of
+[Emkay's network log](https://github.com/emkay-voice/emkay/blob/main/docs/network-log.md),
+never the path, the query or the body:
+
+```json
+{"type": "ovos.network.request", "data": {"t": 1794863530091, "host": "stt.openvoiceos.pt", "method": "POST", "status": 200, "bytes": 52, "who": "ovos-stt-plugin-server", "kind": "stt", "service": "speech recognition (OpenVoiceOS server)"}}
+```
+
+Emkay sends it from its network log; on an ordinary OVOS,
+[ovos-phal-plugin-ha-link](https://github.com/andlo/ovos-phal-plugin-ha-link)
+will (#15, #16).
+
 ## As an Assist satellite
 
 A device that sends audio (Emkay does) is also an ordinary Assist device:

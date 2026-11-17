@@ -77,6 +77,10 @@ CONNECT_SCHEMA = {
         vol.Optional("languages"): [str],
     })],
     vol.Optional("wake_word"): vol.All(str, vol.Length(max=64)),
+    # its ovos-control-panel can be reached through this connection (#15),
+    # and where a browser can open it, if anywhere
+    vol.Optional("panel"): bool,
+    vol.Optional("panel_url"): vol.All(str, vol.Length(max=200)),
 }
 
 BUS_SCHEMA = {
@@ -177,7 +181,8 @@ def _find_entry(hass: HomeAssistant, device_id: str) -> ConfigEntry | None:
 
 def _update_device_info(hass: HomeAssistant, entry: ConfigEntry, info: dict) -> None:
     """Keep model/version current as the device updates itself."""
-    new = {k: info[k] for k in (CONF_MODEL, CONF_MANUFACTURER, CONF_SW_VERSION) if k in info}
+    new = {k: info[k] for k in (CONF_MODEL, CONF_MANUFACTURER, CONF_SW_VERSION, "panel_url")
+           if k in info}
     if any(entry.data.get(k) != v for k, v in new.items()):
         hass.config_entries.async_update_entry(entry, data={**entry.data, **new})
         registry = dr.async_get(hass)
@@ -187,6 +192,8 @@ def _update_device_info(hass: HomeAssistant, entry: ConfigEntry, info: dict) -> 
                 model=new.get(CONF_MODEL, device.model),
                 manufacturer=new.get(CONF_MANUFACTURER, device.manufacturer),
                 sw_version=new.get(CONF_SW_VERSION, device.sw_version),
+                # "Open control panel" on the device page
+                configuration_url=new.get("panel_url", device.configuration_url),
             )
 
 

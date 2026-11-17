@@ -183,6 +183,25 @@ whenever it changes. The volume is the device's own, set over the bus
 The idea of a browser as an Assist satellite over HA's WebSocket API comes
 from [Voice Satellite](https://github.com/jxlarrea/voice-satellite-card-integration).
 
+## 6. The control panel through the connection
+
+A device that has [ovos-control-panel](https://github.com/OpenVoiceOS/ovos-control-panel)
+says `"panel": true` in `ovos/connect` (and, optionally, `"panel_url"`: where
+a browser can open it, for "Open control panel" on the device page). HA then
+reads and sets its settings through the connection, never over the network:
+
+- HA sends `{"type": "panel", "id": n, "method": "GET" | "POST" | "PUT", "path": "/config/quick", "body": …}`
+  on the `ovos/connect` subscription. `path` is the panel's API path without `/api`.
+- The device makes that call to its own panel (`http://127.0.0.1:8500/api` + `path`,
+  with the panel's access token) and answers with
+  `{"type": "ovos/panel/response", "device_id": "…", "request_id": n, "status": 200, "body": {…}}`.
+
+What HA uses today: `GET /config/quick`, `POST /config/quick`, `GET /health`,
+`GET /skills`, `GET /config/merged`, `PUT /skills/{id}/enabled`, `GET /updates`,
+`POST /system/{restart_services|reboot}`.
+[ovos-phal-plugin-ha-link](https://github.com/andlo/ovos-phal-plugin-ha-link)
+does the device's side on an ordinary OVOS.
+
 ## Versions
 
 The protocol number goes up only for changes an older client can't live with.

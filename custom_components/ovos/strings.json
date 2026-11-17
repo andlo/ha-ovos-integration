@@ -155,6 +155,12 @@
       },
       "stop": {
         "name": "Stop"
+      },
+      "panel_restart_services": {
+        "name": "Restart OVOS"
+      },
+      "panel_reboot": {
+        "name": "Reboot"
       }
     },
     "notify": {
@@ -178,6 +184,15 @@
       },
       "last_answer": {
         "name": "Last answer"
+      },
+      "contacted_today": {
+        "name": "Contacted today"
+      },
+      "last_contacted": {
+        "name": "Last contacted"
+      },
+      "panel_updates": {
+        "name": "Updates available"
       }
     },
     "select": {
@@ -199,6 +214,35 @@
     "media_player": {
       "media_player": {
         "name": "Media player"
+      }
+    },
+    "event": {
+      "network_request": {
+        "name": "Network request",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "self": "Its own site",
+              "stt": "Speech recognition",
+              "tts": "Voice",
+              "translate": "Translation",
+              "wikipedia": "Wikipedia",
+              "models": "Models",
+              "store": "Skill store",
+              "packages": "Packages",
+              "pyodide": "Pyodide",
+              "github": "GitHub",
+              "weather": "Weather",
+              "radio": "Radio",
+              "other": "Other"
+            }
+          }
+        }
+      }
+    },
+    "binary_sensor": {
+      "panel_problem": {
+        "name": "Problem"
       }
     }
   },

@@ -25,6 +25,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_call_later
+from homeassistant.util import dt as dt_util
 
 from ..const import CONF_DEVICE_ID, SIGNAL_NEW_CAPABILITY
 
@@ -38,6 +39,12 @@ CAP_VOLUME = "volume"          # mycroft.volume.get -> .response {percent, muted
 CAP_MIC = "mic"                # mycroft.mic.get_status -> .response {muted}
 CAP_LOCAL_ONLY = "local_only"  # ovos.local_only.status -> .response {enabled}
 CAP_KIOSK = "kiosk"            # ovos.kiosk.status -> .response {keep_awake, ...}
+CAP_NETLOG = "netlog"          # it sends ovos.network.request (#16)
+
+# What a network request is for (ovos.network.request's "kind", the same ids
+# as Emkay's network log, docs/network-log.md there)
+NET_KINDS = ["self", "stt", "tts", "translate", "wikipedia", "models", "store",
+             "packages", "pyodide", "github", "weather", "radio", "other"]
 
 # What is asked when a device (re)connects: request -> capability
 PROBES = {
@@ -75,6 +82,8 @@ FORWARD_TYPES = sorted({
     "ovos.kiosk.keep_awake.response",
     # whatever sensors the device has (ovos-PHAL-sensors' messages)
     "ovos.phal.sensor", "ovos.phal.binary_sensor",
+    # what it sends out on the network, one message per request (#16)
+    "ovos.network.request",
 })
 
 
@@ -98,6 +107,7 @@ class OvosDevice:
         self.transport: Transport | None = None
         self.info: dict[str, Any] = {}
         self.satellite = None   # its assist_satellite entity, when it is one (#11)
+        self.panel = None       # its control panel's coordinator (#15, panel.py)
         self.media_state: str | None = None   # its media player: playing / paused / idle
         self.media_url: str | None = None
 
@@ -116,6 +126,11 @@ class OvosDevice:
         self.mic_muted: bool | None = None
         self.local_only: bool | None = None
         self.keep_awake: bool | None = None
+        # the network log (#16): today's requests, by service, and the last one
+        self.net_day = None
+        self.net_count = 0
+        self.net_services: dict[str, int] = {}
+        self.net_last: dict[str, Any] | None = None
 
         self._spoke = False
         self._thinking_timer: CALLBACK_TYPE | None = None
@@ -136,6 +151,8 @@ class OvosDevice:
         self._set_state(STATE_IDLE)
         if info.get("satellite"):
             self._found("satellite")
+        if info.get("panel"):
+            self._found("panel")
         self._notify()
         self.probe()
 
@@ -274,6 +291,8 @@ class OvosDevice:
                     self._found(CAP_KIOSK)
             case "ovos.phal.sensor" | "ovos.phal.binary_sensor":
                 self._sensor(msg_type == "ovos.phal.binary_sensor", data)
+            case "ovos.network.request":
+                self._network_request(data)
             case _:
                 return False
         return True
@@ -298,6 +317,24 @@ class OvosDevice:
             )
         known["state"] = data.get("state")
         known["attributes"] = attributes if isinstance(attributes, dict) else {}
+
+    def _network_request(self, data: dict) -> None:
+        """One request the device made: never more than the log line has
+        (when, host, method, status, size, who, kind, service)."""
+        today = dt_util.now().date()
+        if self.net_day != today:
+            self.net_day, self.net_count, self.net_services = today, 0, {}
+        if data.get("kind") == "self":
+            # the device's own site files are the device itself, not
+            # something sent out (as ovos-skill-guardian counts them)
+            pass
+        else:
+            self.net_count += 1
+            service = str(data.get("service") or data.get("host") or "?")
+            self.net_services[service] = self.net_services.get(service, 0) + 1
+        self.net_last = {k: data.get(k) for k in
+                         ("t", "host", "method", "status", "bytes", "who", "kind", "service")}
+        self._found(CAP_NETLOG)
 
     # --- bookkeeping ------------------------------------------------------
 
