@@ -127,8 +127,46 @@ brain works:
   can't fetch it. The integration serves the same audio with CORS at
   **`/api/ovos/tts/<token>`**. Use that one from a browser.
 
-The `assist_satellite` entity (announce, start a conversation, timers, the
-pipeline chosen per device in HA) is [#11](https://github.com/andlo/ha-ovos-integration/issues/11).
+## 5. As an Assist satellite
+
+A device that sends `"satellite": true` in `ovos/connect` becomes an Assist
+satellite in HA ([#11](https://github.com/andlo/ha-ovos-integration/issues/11)):
+an `assist_satellite` entity, and the *Assistant* (pipeline) and *Finished
+speaking detection* selects next to it. HA then runs the pipeline chosen
+for the device. Automations can announce on it and start a conversation,
+and it can run timers. `ready.features` contains `"satellite"` when the
+integration can do this; a client then uses these commands instead of
+`assist_pipeline/run`:
+
+### `ovos/satellite/run` – one question (a subscription)
+
+```json
+{"id": 9, "type": "ovos/satellite/run", "device_id": "…", "start_stage": "stt"}
+{"id": 9, "type": "ovos/satellite/run", "device_id": "…", "start_stage": "intent", "text": "what time is it"}
+```
+
+The first event is `{"type": "init", "handler_id": n}`. With `"stt"`, send
+the recording as binary frames: the `handler_id` byte, then 16 kHz mono
+16-bit PCM. Send that byte alone to end it. The wake word is the device's
+own. Then the pipeline's events follow, in `assist_pipeline/run`'s shape
+(`run-start`, `stt-end`, `intent-end`, `tts-end` with `tts_output.url`
+already on the CORS path, `run-end`, `error`).
+
+### `ovos/satellite/done` – finished playing
+
+`{"type": "ovos/satellite/done", "device_id": "…", "what": "tts"}` after
+playing an answer, so the satellite goes back to idle;
+`"what": "announce", "announce_id": n` after an announcement.
+
+### Events on the `ovos/connect` subscription
+
+| Event | |
+|---|---|
+| `{"type": "announce", "id": n, "message": "…", "media_url": "/api/ovos/tts/…", "preannounce_url": …, "start_conversation": false}` | play it (or say `message`), then `ovos/satellite/done` with `what: "announce"`. With `start_conversation: true`, listen right after it without the wake word, and send the answer as a normal run |
+| `{"type": "timer", "event": "started" \| "updated" \| "cancelled" \| "finished", "timer": {id, name, seconds_left, is_active, total_seconds}}` | timers set on this device; on `finished`, let the user know |
+
+The idea of a browser as an Assist satellite over HA's WebSocket API comes
+from [Voice Satellite](https://github.com/jxlarrea/voice-satellite-card-integration).
 
 ## Versions
 

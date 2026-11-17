@@ -179,6 +179,22 @@
       "last_answer": {
         "name": "Last answer"
       }
+    },
+    "select": {
+      "pipeline": {
+        "name": "Assistant",
+        "state": {
+          "preferred": "Preferred"
+        }
+      },
+      "vad_sensitivity": {
+        "name": "Finished speaking detection",
+        "state": {
+          "default": "Default",
+          "aggressive": "Aggressive",
+          "relaxed": "Relaxed"
+        }
+      }
     }
   },
   "services": {

@@ -6,7 +6,9 @@
 
 Each OVOS shows up as a **device**, with what can be seen and set on it as entities – volume, listening on/off, state, last question and answer, its own sensors – so automations can turn off listening at night, turn the volume down, make it say something or ask it something. Everything comes from the OVOS bus, which every OVOS speaks, so it is the same whatever kind of OVOS it is.
 
-> Work in progress ([#7](https://github.com/andlo/ha-ovos-integration/issues/7)). Today a device connects **to** Home Assistant ([#9](https://github.com/andlo/ha-ovos-integration/issues/9)) – the way for browsers and devices behind NAT. Home Assistant connecting to an OVOS over HiveMind ([#8](https://github.com/andlo/ha-ovos-integration/issues/8)) and OVOS devices as Assist satellites ([#11](https://github.com/andlo/ha-ovos-integration/issues/11)) come next.
+Devices that send audio, like [Emkay](https://emkay.ai), are also **Assist satellites**: pick their pipeline in HA, announce on them, start a conversation, set timers ([#11](https://github.com/andlo/ha-ovos-integration/issues/11)).
+
+> Work in progress ([#7](https://github.com/andlo/ha-ovos-integration/issues/7)). Today a device connects **to** Home Assistant ([#9](https://github.com/andlo/ha-ovos-integration/issues/9)) – the way for browsers and devices behind NAT. Home Assistant connecting to an OVOS over HiveMind ([#8](https://github.com/andlo/ha-ovos-integration/issues/8)) and Emkay Home with its satellites ([#12](https://github.com/andlo/ha-ovos-integration/issues/12)) come next.
 
 ## OpenVoiceOS devices
 
@@ -43,6 +45,10 @@ Adds one integration entry, **"OpenVoiceOS"**, with:
 2. Add the **OpenVoiceOS** integration in HA and choose *The OpenVoiceOS add-ons on this Home Assistant*.
 3. On Home Assistant OS / Supervised, each add-on's API URL is filled in automatically by querying Supervisor — nothing to do here. On a non-Supervisor install (or if an add-on isn't found), fill in the missing URL(s) under the integration's own entities (e.g. `http://<hostname>:8500` for `ovos-skills`).
 4. Use **Add sub-entry** on the integration to add skills, run voice setup, or configure persona.
+
+## Thanks
+
+- The idea of a browser as an Assist satellite over Home Assistant's WebSocket API comes from [Voice Satellite](https://github.com/jxlarrea/voice-satellite-card-integration) by jxlarrea.
 
 ## License
 

@@ -50,6 +50,7 @@ from ..const import (
     SUPPORTED_PROTOCOLS,
 )
 from .bus import FORWARD_TYPES, OvosDevice
+from .satellite import async_setup_satellite_ws
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,6 +67,8 @@ CONNECT_SCHEMA = {
     vol.Optional("manufacturer"): _TEXT,
     vol.Optional("sw_version"): _TEXT,
     vol.Optional("lang"): vol.All(str, vol.Length(max=16)),
+    # it sends audio and wants to be an Assist satellite (#11)
+    vol.Optional("satellite"): bool,
 }
 
 BUS_SCHEMA = {
@@ -128,6 +131,8 @@ class InboundHub:
             # assist_pipeline/run, so Assist knows where it was asked (area)
             "device_id": ha_device.id if ha_device else None,
             "forward": FORWARD_TYPES,
+            # what this integration offers beyond the bus
+            "features": ["satellite"],
         })
         device.attach(conn, conn.info)
 
@@ -281,5 +286,6 @@ class OvosTtsView(HomeAssistantView):
 def async_setup_inbound(hass: HomeAssistant) -> None:
     hass.data[DOMAIN][DATA_INBOUND_HUB] = InboundHub(hass)
     hass.http.register_view(OvosTtsView())
+    async_setup_satellite_ws(hass)
     websocket_api.async_register_command(hass, ws_connect)
     websocket_api.async_register_command(hass, ws_bus)

@@ -84,6 +84,9 @@ class Transport(Protocol):
     def send_bus(self, message: dict[str, Any]) -> None:
         """A bus message from HA to the device."""
 
+    def send_event(self, event: dict[str, Any]) -> None:
+        """Anything else for the device (announcements, timers: #11)."""
+
 
 class OvosDevice:
     """The runtime side of one device config entry."""
@@ -94,6 +97,7 @@ class OvosDevice:
         self.device_id: str = entry.data[CONF_DEVICE_ID]
         self.transport: Transport | None = None
         self.info: dict[str, Any] = {}
+        self.satellite = None   # its assist_satellite entity, when it is one (#11)
 
         self.capabilities: set[str] = set(entry.data.get(CONF_CAPABILITIES, []))
         # sensor_id -> {"binary": bool, "name": str, "state": ..., "attributes": {}}
@@ -128,8 +132,17 @@ class OvosDevice:
         self.transport = transport
         self.info = info
         self._set_state(STATE_IDLE)
+        if info.get("satellite"):
+            self._found("satellite")
         self._notify()
         self.probe()
+
+    @callback
+    def send_event(self, event: dict[str, Any]) -> bool:
+        if self.transport is None:
+            return False
+        self.transport.send_event(event)
+        return True
 
     @callback
     def detach(self, transport: Transport | None = None) -> None:
