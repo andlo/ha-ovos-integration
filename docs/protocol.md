@@ -68,7 +68,7 @@ The result comes at once; then **events** on the same `id`:
 | Event | Meaning |
 |---|---|
 | `{"type": "pending"}` | HA doesn't have this device yet, or it is disabled/reloading. A new device is shown under **Settings → Devices & services → Discovered** ("Test OVOS wants to join"); stay connected – `ready` follows when someone adds it |
-| `{"type": "ready", "protocol": 1, "entry_id": "…", "forward": […]}` | paired. `forward` lists the bus message types HA wants from the device (see 3) |
+| `{"type": "ready", "protocol": 1, "entry_id": "…", "device_id": "…", "forward": […]}` | paired. `device_id` is HA's own id for the device (for `assist_pipeline/run`, see 4); `forward` lists the bus message types HA wants from the device (see 3). HA asks the device what it can do right after this |
 | `{"type": "bus", "message": {"type": …, "data": {…}, "context": {…}}}` | a bus message for the device – put it on its bus / handle it |
 | `{"type": "displaced"}` | another connection took over this `device_id`; stop |
 | `{"type": "removed"}` | the device was deleted in HA; stop (connecting again offers it anew) |
@@ -104,6 +104,31 @@ Device → HA: the types in `ready.forward` – state (`recognizer_loop:*`,
 `ovos.phal.binary_sensor`). Sending more is harmless but wasted. A device that
 *is* the bus (Emkay with the Home Assistant brain) answers HA's questions
 itself. [devices.md](devices.md) has what each message does in HA.
+
+## 4. Voice: Home Assistant's Assist as the brain
+
+A device that sends audio can use HA's Assist directly with HA's own
+`assist_pipeline/run` on the same WebSocket. That's how Emkay with the Home Assistant
+brain works:
+
+- `start_stage: "stt"`, `input: {sample_rate: 16000}`: send the recording
+  as binary frames, each prefixed with the `stt_binary_handler_id` byte from
+  `run-start`, then that byte alone to end it. With `start_stage: "intent"`,
+  `input: {text}` for typed questions.
+- Give `device_id` from the `ready` event, so Assist knows which device
+  (and so which area) the question came from, and keep `conversation_id`
+  from `intent-end` for follow-ups (`continue_conversation`).
+- Turn the pipeline's events into the device's own bus messages
+  (`recognizer_loop:record_end`, `utterance`, `speak`,
+  `audio_output_start/end`) and send them with `ovos/bus`. Then the device's
+  state in HA follows, and an OVOS face reacts as it does with its own OVOS.
+- **TTS audio**: `tts-end` gives `tts_output.token`. HA's own
+  `/api/tts_proxy/<token>` has no CORS headers, so a page on another site
+  can't fetch it. The integration serves the same audio with CORS at
+  **`/api/ovos/tts/<token>`**. Use that one from a browser.
+
+The `assist_satellite` entity (announce, start a conversation, timers, the
+pipeline chosen per device in HA) is [#11](https://github.com/andlo/ha-ovos-integration/issues/11).
 
 ## Versions
 

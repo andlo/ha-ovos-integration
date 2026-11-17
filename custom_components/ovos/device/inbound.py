@@ -116,9 +116,10 @@ class InboundHub:
         device: OvosDevice | None = self.hass.data[DOMAIN][DATA_DEVICES].get(device_id)
         if conn is None or device is None:
             return
-        device.attach(conn, conn.info)
         _update_device_info(self.hass, device.entry, conn.info)
         ha_device = dr.async_get(self.hass).async_get_device({(DOMAIN, device_id)})
+        # ready first: attach() asks the device what it can do at once, and
+        # a client only answers once it has heard ready (and its forward list)
         conn.send_event({
             "type": "ready",
             "protocol": PROTOCOL_VERSION,
@@ -128,6 +129,7 @@ class InboundHub:
             "device_id": ha_device.id if ha_device else None,
             "forward": FORWARD_TYPES,
         })
+        device.attach(conn, conn.info)
 
     @callback
     def device_unloaded(self, device_id: str) -> None:
