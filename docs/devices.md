@@ -61,6 +61,16 @@ device's connection, so the panel is never opened on the network:
 | `binary_sensor` **Problem** | the dashboard: the bus or an essential service not answering |
 | `sensor` **Updates available** | OVOS packages with a newer version on the device's channel |
 | `button` **Restart OVOS**, **Reboot** | the panel's system actions (they need the panel's token) |
+| `button` **Take backup**, `sensor` **Last backup** | the panel's backup archive, kept in HA (below) |
+
+### Backups
+
+**Take backup** asks the panel for its archive (your `mycroft.conf` layer and
+the skills' settings, the same file its Backup page downloads) and keeps it in
+`/config/ovos_backups/<device>/`, the newest 5. Inside `/config`, so HA's own
+backups take them along. **Last backup** says when, and which file. Put it
+back with the panel's Restore. The archive has to fit in one of HA's
+WebSocket messages, about 3 MB; a settings backup is a few kB.
 
 ### Skill settings
 

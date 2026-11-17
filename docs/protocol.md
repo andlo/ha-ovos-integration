@@ -195,10 +195,15 @@ reads and sets its settings through the connection, never over the network:
 - The device makes that call to its own panel (`http://127.0.0.1:8500/api` + `path`,
   with the panel's access token) and answers with
   `{"type": "ovos/panel/response", "device_id": "…", "request_id": n, "status": 200, "body": {…}}`.
+- When the answer is a file (the panel's backup), the event has `"binary": true`,
+  and `body` is `{"content_type": "…", "filename": "…", "data": "<base64>"}`.
+  It goes in one WebSocket message, and HA takes 4 MB, so a bigger file is
+  answered with status 413 instead.
 
 What HA uses today: `GET /config/quick`, `POST /config/quick`, `GET /health`,
-`GET /skills`, `GET /config/merged`, `PUT /skills/{id}/enabled`, `GET /updates`,
-`POST /system/{restart_services|reboot}`.
+`GET /skills`, `GET /skills/{id}`, `PUT /skills/{id}`, `GET /config/merged`,
+`PUT /skills/{id}/enabled`, `GET /updates`, `GET`/`POST /updates/channel`,
+`GET /backup` (binary), `POST /system/{restart_services|reboot}`.
 [ovos-phal-plugin-ha-link](https://github.com/andlo/ovos-phal-plugin-ha-link)
 does the device's side on an ordinary OVOS.
 

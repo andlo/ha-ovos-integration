@@ -15,14 +15,17 @@ opened on the network, and it works behind NAT.
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
+import base64
+from datetime import datetime, timedelta
 import itertools
 import logging
+from pathlib import Path
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .bus import OvosDevice
 
@@ -33,6 +36,8 @@ TIMEOUT = 30
 POLL = timedelta(minutes=2)
 UPDATES_EVERY = 30        # polls between update checks (about an hour)
 SETTINGS_EVERY = 15       # polls between re-reading the skills' settings (half an hour)
+BACKUP_DIR = "ovos_backups"
+KEEP_BACKUPS = 5          # per device
 
 # settingsmeta field types HA can show, and as what
 KINDS = {"checkbox": "switch", "number": "number", "select": "select",
@@ -93,17 +98,22 @@ class PanelClient:
         self.device = device
         self._waiting: dict[int, asyncio.Future] = {}
 
-    async def request(self, method: str, path: str, body: Any = None) -> Any:
-        """One call to the panel's API (path without /api)."""
+    async def request(self, method: str, path: str, body: Any = None,
+                      binary: bool = False, timeout: float = TIMEOUT) -> Any:
+        """One call to the panel's API (path without /api). With binary the
+        answer is a file, which the link sends as {content_type, filename,
+        data} with data in base64."""
         if not self.device.available:
             raise PanelError(f"{self.device.entry.title} is not connected")
         req_id = next(_ids)
         fut = self.device.hass.loop.create_future()
         self._waiting[req_id] = fut
-        self.device.send_event({"type": "panel", "id": req_id, "method": method,
-                                "path": path, "body": body})
+        event = {"type": "panel", "id": req_id, "method": method, "path": path, "body": body}
+        if binary:
+            event["binary"] = True
+        self.device.send_event(event)
         try:
-            status, data = await asyncio.wait_for(fut, TIMEOUT)
+            status, data = await asyncio.wait_for(fut, timeout)
         except TimeoutError as err:
             raise PanelError(f"the control panel on {self.device.entry.title} did not answer") from err
         finally:
@@ -134,6 +144,8 @@ class PanelCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._settings_task: asyncio.Task | None = None
         self._asked: set[str] = set()
         self.setting_kinds: set[str] = set()    # platforms already adding settings
+        self.last_backup: Path | None = None
+        self.last_backup_at: datetime | None = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         if not self.device.available:
@@ -189,6 +201,53 @@ class PanelCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await self.client.request("PUT", f"/skills/{skill_id}", {"settings": {name: value}})
         self.settings[skill_id]["settings"][name] = value
         self.async_update_listeners()
+
+    # --- backups: the panel's archive of the settings, kept in HA ---------------
+
+    @property
+    def backup_dir(self) -> Path:
+        """/config/ovos_backups/<device>: inside /config, so HA's own
+        backups take them along."""
+        return Path(self.hass.config.path(BACKUP_DIR, self.device.device_id))
+
+    def _backups(self) -> list[Path]:
+        if not self.backup_dir.is_dir():
+            return []
+        return sorted(self.backup_dir.glob("*.tar.gz"), key=lambda p: p.stat().st_mtime)
+
+    async def async_find_last_backup(self) -> None:
+        """The newest backup already in /config (after a restart)."""
+        def newest() -> tuple[Path, float] | None:
+            backups = self._backups()
+            return (backups[-1], backups[-1].stat().st_mtime) if backups else None
+
+        if found := await self.hass.async_add_executor_job(newest):
+            self.last_backup = found[0]
+            self.last_backup_at = dt_util.utc_from_timestamp(found[1])
+
+    async def take_backup(self) -> Path:
+        """Ask the panel for its archive and keep it, the newest KEEP_BACKUPS."""
+        answer = await self.client.request("GET", "/backup", binary=True, timeout=90)
+        try:
+            blob = base64.b64decode(answer["data"])
+        except (KeyError, TypeError, ValueError) as err:
+            raise PanelError("the device sent no backup (its link is too old?)") from err
+        name = Path(str(answer.get("filename") or "")).name
+        if not name.endswith(".tar.gz"):
+            name = dt_util.now().strftime("ovos-backup-%Y%m%d-%H%M%S.tar.gz")
+
+        def write() -> Path:
+            self.backup_dir.mkdir(parents=True, exist_ok=True)
+            path = self.backup_dir / name
+            path.write_bytes(blob)
+            for old in self._backups()[:-KEEP_BACKUPS]:
+                old.unlink(missing_ok=True)
+            return path
+
+        path = await self.hass.async_add_executor_job(write)
+        self.last_backup, self.last_backup_at = path, dt_util.utcnow()
+        self.async_update_listeners()
+        return path
 
     async def set_channel(self, channel: str) -> None:
         await self.client.request("POST", "/updates/channel", {"channel": channel})
