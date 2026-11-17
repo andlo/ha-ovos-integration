@@ -107,6 +107,7 @@ class OvosDevice:
         self.transport: Transport | None = None
         self.info: dict[str, Any] = {}
         self.satellite = None   # its assist_satellite entity, when it is one (#11)
+        self.panel = None       # its control panel's coordinator (#15, panel.py)
         self.media_state: str | None = None   # its media player: playing / paused / idle
         self.media_url: str | None = None
 
@@ -150,6 +151,8 @@ class OvosDevice:
         self._set_state(STATE_IDLE)
         if info.get("satellite"):
             self._found("satellite")
+        if info.get("panel"):
+            self._found("panel")
         self._notify()
         self.probe()
 

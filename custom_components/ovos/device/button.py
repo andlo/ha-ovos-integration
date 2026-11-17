@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from .bus import OvosDevice
+from . import panel_entities
 from .entity import CAP_BASE, OvosDeviceEntity, setup_capabilities
 from homeassistant.components.button import ButtonEntity
 
@@ -10,7 +11,7 @@ async def async_setup_entry(hass, entry, add_entities):
     setup_capabilities(hass, entry, add_entities, lambda device, cap:
                        [OvosBusButton(device, "listen", "mycroft.mic.listen"),
                         OvosBusButton(device, "stop", "mycroft.stop")]
-                       if cap == CAP_BASE else [])
+                       if cap == CAP_BASE else panel_entities.buttons(device, cap))
 
 
 class OvosBusButton(OvosDeviceEntity, ButtonEntity):

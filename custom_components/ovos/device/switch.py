@@ -7,7 +7,9 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import EntityCategory
 
 from .bus import CAP_KIOSK, CAP_LOCAL_ONLY, CAP_MIC, CAP_VOLUME, OvosDevice
+from . import panel_entities
 from .entity import OvosDeviceEntity, setup_capabilities
+from .panel import CAP_PANEL
 
 
 def _entities(device: OvosDevice, cap: str) -> list:
@@ -24,7 +26,13 @@ def _entities(device: OvosDevice, cap: str) -> list:
 
 
 async def async_setup_entry(hass, entry, add_entities):
-    setup_capabilities(hass, entry, add_entities, _entities)
+    def factory(device: OvosDevice, cap: str) -> list:
+        if cap == CAP_PANEL:
+            # a switch per skill, as the panel reports them (#15)
+            panel_entities.setup_skill_switches(device, add_entities)
+            return []
+        return _entities(device, cap)
+    setup_capabilities(hass, entry, add_entities, factory)
 
 
 class _OvosSwitch(OvosDeviceEntity, SwitchEntity):

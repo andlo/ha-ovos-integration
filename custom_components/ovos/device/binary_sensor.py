@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 
+from . import panel_entities
 from .entity import setup_capabilities
 from .sensor import OvosPhalSensorBase
 
@@ -13,7 +14,7 @@ async def async_setup_entry(hass, entry, add_entities):
             sid = cap.removeprefix("sensor:")
             if device.sensors.get(sid, {}).get("binary"):
                 return [OvosPhalBinarySensor(device, sid)]
-        return []
+        return panel_entities.binary_sensors(device, cap)
     setup_capabilities(hass, entry, add_entities, factory)
 
 

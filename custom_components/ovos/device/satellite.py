@@ -119,8 +119,30 @@ def ws_media(hass: HomeAssistant, connection: websocket_api.ActiveConnection, ms
     connection.send_result(msg["id"])
 
 
+@websocket_api.websocket_command({
+    vol.Required("type"): "ovos/panel/response",
+    vol.Required("device_id"): str,
+    vol.Required("request_id"): int,     # the panel event's id
+    vol.Required("status"): int,
+    vol.Optional("body"): object,
+})
+@callback
+def ws_panel_response(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """The control panel's answer to a `panel` event (#15, panel.py)."""
+    hub = hass.data[DOMAIN][DATA_INBOUND_HUB]
+    conn = hub.connections.get(msg["device_id"])
+    device = hass.data[DOMAIN][DATA_DEVICES].get(msg["device_id"])
+    if conn is None or conn.connection is not connection or device is None:
+        connection.send_error(msg["id"], "not_connected", "send ovos/connect for this device first")
+        return
+    if device.panel is not None:
+        device.panel.client.response(msg["request_id"], msg["status"], msg.get("body"))
+    connection.send_result(msg["id"])
+
+
 @callback
 def async_setup_satellite_ws(hass: HomeAssistant) -> None:
+    websocket_api.async_register_command(hass, ws_panel_response)
     websocket_api.async_register_command(hass, ws_run)
     websocket_api.async_register_command(hass, ws_done)
     websocket_api.async_register_command(hass, ws_media)

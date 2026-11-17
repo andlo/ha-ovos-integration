@@ -6,6 +6,8 @@ a live entity here.
 """
 from __future__ import annotations
 
+from .device import text as device_text  # issue #15
+
 from homeassistant.components.text import TextEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -22,8 +24,8 @@ from .skill_settings_coordinator import OvosSkillSettingsCoordinator
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities):
-    if entry.data.get("entry_type") == "device":  # issue #7: nothing here for devices
-        return
+    if entry.data.get("entry_type") == "device":  # issue #15: the control panel's language
+        return await device_text.async_setup_entry(hass, entry, add_entities)
     coordinator: OvosSharedConfigCoordinator = hass.data[DOMAIN][entry.entry_id]
     core_settings_subentry_id = hass.data[DOMAIN][f"{entry.entry_id}_core_settings_subentry"]
     add_entities([

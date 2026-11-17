@@ -10,6 +10,7 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 
 from ..const import DOMAIN
 from .bus import CAP_NETLOG, STATES, OvosDevice
+from . import panel_entities
 from .entity import CAP_BASE, OvosDeviceEntity, setup_capabilities
 
 
@@ -17,6 +18,8 @@ def _entities(device: OvosDevice, cap: str) -> list:
     if cap == CAP_BASE:
         return [OvosState(device), OvosText(device, "last_question"),
                 OvosText(device, "last_answer")]
+    if cap == "panel":
+        return panel_entities.sensors(device, cap)
     if cap == CAP_NETLOG:
         return [OvosContactedToday(device), OvosLastContacted(device)]
     if cap.startswith("sensor:"):

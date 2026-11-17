@@ -42,6 +42,24 @@ every change, so changes by voice show up in HA); mic in ovos-dinkum-listener.
 Note: ovos-PHAL-plugin-alsa only obeys messages in the device's own session.
 HA sends without a session, which OVOS treats as the default (the device's own).
 
+## The control panel's settings
+
+A device whose link offers its [ovos-control-panel](https://github.com/OpenVoiceOS/ovos-control-panel)
+(`panel: true`; ovos-phal-plugin-ha-link does it on an ordinary OVOS) also gets
+what the panel can set. The panel itself does the reading and writing (your
+own layer of `mycroft.conf` only, a backup on every save), through the
+device's connection, so the panel is never opened on the network:
+
+| Entity | Panel |
+|---|---|
+| `text` **Language** | `lang` |
+| `select` **Units**, **Time format**, **Date format** | the Simple tab |
+| `select` **Voice**, **Speech to text**, **Wake word**, **Voice activity detection** | the plugins and wake words the device has |
+| `switch` per skill | the skill on or off (`skills.blacklisted_skills`) |
+| `binary_sensor` **Problem** | the dashboard: the bus or an essential service not answering |
+| `sensor` **Updates available** | OVOS packages with a newer version on the device's channel |
+| `button` **Restart OVOS**, **Reboot** | the panel's system actions (they need the panel's token) |
+
 ## The network log
 
 A device that tells what it sends out on the network, one
