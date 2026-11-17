@@ -22,6 +22,8 @@ from .skill_settings_coordinator import OvosSkillSettingsCoordinator
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities):
+    if entry.data.get("entry_type") == "device":  # issue #7: nothing here for devices
+        return
     coordinator: OvosSharedConfigCoordinator = hass.data[DOMAIN][entry.entry_id]
     core_settings_subentry_id = hass.data[DOMAIN][f"{entry.entry_id}_core_settings_subentry"]
     add_entities([

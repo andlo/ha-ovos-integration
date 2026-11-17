@@ -1,0 +1,33 @@
+ask:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: ovos
+          multiple: true
+    utterance:
+      required: true
+      example: "what's the weather like"
+      selector:
+        text:
+    lang:
+      example: "en-us"
+      selector:
+        text:
+send_message:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: ovos
+          multiple: true
+    type:
+      required: true
+      example: "mycroft.volume.increase"
+      selector:
+        text:
+    data:
+      selector:
+        object:

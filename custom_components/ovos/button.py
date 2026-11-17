@@ -27,6 +27,8 @@ same content the old flow's own "persona_success" abort message showed.
 """
 from __future__ import annotations
 
+from .device import button as device_platform  # issue #7
+
 import asyncio
 import time
 
@@ -57,6 +59,8 @@ def _get_skills_extra_api_url() -> str | None:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities):
+    if entry.data.get("entry_type") == "device":  # issue #7: a device entry
+        return await device_platform.async_setup_entry(hass, entry, add_entities)
     coordinator: OvosPersonaCoordinator = hass.data[DOMAIN][f"{entry.entry_id}_persona"]
     persona_subentry_id = hass.data[DOMAIN][f"{entry.entry_id}_persona_subentry"]
     add_entities(

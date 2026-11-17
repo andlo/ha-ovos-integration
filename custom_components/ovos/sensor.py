@@ -43,6 +43,9 @@ core PR #128157, "Add config subentry support to device registry").
 """
 from __future__ import annotations
 
+from .device import sensor as device_platform  # issue #7
+from .registry import get_device
+
 import logging
 
 from homeassistant.components.sensor import SensorEntity
@@ -113,6 +116,8 @@ def _ensure_hub_device(hass: HomeAssistant, entry: ConfigEntry, source_type: str
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities):
+    if entry.data.get("entry_type") == "device":  # issue #7: a device entry
+        return await device_platform.async_setup_entry(hass, entry, add_entities)
     installed = await hass.async_add_executor_job(_fetch_all_installed_skills)
     config_tool_url = await hass.async_add_executor_job(
         lambda: read_shared_config().get(CONF_SKILL_CONFIG_TOOL_URL) or None
@@ -199,7 +204,7 @@ def _cleanup_orphaned_hubs(hass: HomeAssistant, entry: ConfigEntry, still_used: 
     for source_type, identifier in (("curated", HUB_SKILLS), ("extra", HUB_SKILLS_EXTRA)):
         if source_type in still_used:
             continue
-        device = device_registry.async_get_device(identifiers={(DOMAIN, identifier)})
+        device = get_device(hass, (DOMAIN, identifier), entry.entry_id)
         if device is not None:
             device_registry.async_remove_device(device.id)
 

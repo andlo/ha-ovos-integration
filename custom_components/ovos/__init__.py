@@ -1,4 +1,9 @@
-"""The OpenVoiceOS shared config integration."""
+"""The OpenVoiceOS integration.
+
+Two kinds of config entries share the `ovos` domain (issue #7, see const.py):
+the add-on entry -- haos-ovos-addons' shared config, everything in this file
+below async_setup_entry -- and one entry per OpenVoiceOS device (device/).
+"""
 from __future__ import annotations
 
 import logging
@@ -9,7 +14,14 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import label_registry as lr
 
 from .const import (
+    ADDONS_UNIQUE_ID,
+    CONF_ENTRY_TYPE,
+    DATA_DEVICES,
     DOMAIN,
+    ENTRY_TYPE_ADDONS,
+    ENTRY_TYPE_DEVICE,
+    ENTRY_TYPE_INBOUND,
+    DATA_INBOUND_HUB,
     CORE_SETTINGS_DEVICE_ID,
     PERSONA_DEVICE_ID,
     CONF_LANG,
@@ -28,6 +40,13 @@ from .shared_config import write_shared_config_key
 from .skill_settings import fetch_catalog_names, get_skills_api_url, prettify_skill_id
 from .skill_settings_coordinator import OvosSkillSettingsCoordinator
 from .supervisor_discovery import async_discover_addon_api_urls
+from .device import (
+    async_remove_device_entry,
+    async_setup_device_entry,
+    async_unload_device_entry,
+)
+from .device.inbound import async_setup_inbound
+from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,7 +80,45 @@ def _seed_missing_keys(current: dict, entry: ConfigEntry) -> bool:
     return changed
 
 
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    hass.data.setdefault(DOMAIN, {}).setdefault(DATA_DEVICES, {})
+    async_setup_inbound(hass)
+    async_setup_services(hass)
+    return True
+
+
+def _is_device(entry: ConfigEntry) -> bool:
+    return entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_DEVICE
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Version 1 entries are from before #7: the add-on entry, the only kind
+    there was. Mark them as such; nothing else changes for them."""
+    if entry.version == 1:
+        hass.config_entries.async_update_entry(
+            entry,
+            data={**entry.data, CONF_ENTRY_TYPE: ENTRY_TYPE_ADDONS},
+            unique_id=entry.unique_id or ADDONS_UNIQUE_ID,
+            version=2,
+        )
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    if _is_device(entry):
+        return await async_setup_device_entry(hass, entry)
+    if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_INBOUND:
+        hass.data[DOMAIN][DATA_INBOUND_HUB].enabled = True
+        return True
+    return await _async_setup_addons_entry(hass, entry)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    if _is_device(entry):
+        await async_remove_device_entry(hass, entry)
+
+
+async def _async_setup_addons_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = OvosSharedConfigCoordinator(hass)
     await coordinator.async_config_entry_first_refresh()
 
@@ -339,6 +396,11 @@ async def _async_create_missing_skill_subentries(
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    if _is_device(entry):
+        return await async_unload_device_entry(hass, entry)
+    if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_INBOUND:
+        hass.data[DOMAIN][DATA_INBOUND_HUB].enabled = False
+        return True
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id, None)

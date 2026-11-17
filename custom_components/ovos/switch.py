@@ -21,6 +21,8 @@ integration's default behavior.
 """
 from __future__ import annotations
 
+from .device import switch as device_platform  # issue #7
+
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -36,6 +38,8 @@ from .skill_settings_coordinator import OvosSkillSettingsCoordinator
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities):
+    if entry.data.get("entry_type") == "device":  # issue #7: a device entry
+        return await device_platform.async_setup_entry(hass, entry, add_entities)
     shared_coordinator: OvosSharedConfigCoordinator = hass.data[DOMAIN][entry.entry_id]
     core_settings_subentry_id = hass.data[DOMAIN][f"{entry.entry_id}_core_settings_subentry"]
     add_entities(
