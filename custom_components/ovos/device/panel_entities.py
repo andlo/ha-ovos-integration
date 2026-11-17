@@ -5,13 +5,15 @@ from typing import Any
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.components.button import ButtonEntity
+from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.components.select import SelectEntity
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.components.text import TextEntity
+from homeassistant.components.text import TextEntity, TextMode
 from homeassistant.const import EntityCategory
 from homeassistant.core import callback
 
+from ..skill_settings import SENSITIVE_NAME_HINTS, prettify_skill_id
 from .bus import OvosDevice
 from .entity import OvosDeviceEntity
 from .panel import CAP_PANEL, PanelCoordinator
@@ -115,11 +117,41 @@ QUICK = {"lang": ("text", "Language"), "system_unit": ("select", "Units"),
          "listener.VAD.module": ("select", "Voice activity detection")}
 
 
+class PanelChannel(PanelEntity, SelectEntity):
+    """The release channel updates come from (alpha, testing, stable)."""
+
+    _attr_icon = "mdi:source-branch"
+
+    def __init__(self, device: OvosDevice) -> None:
+        super().__init__(device, "panel_channel")
+        self._attr_translation_key = None
+        self._attr_name = "Release channel"
+
+    @property
+    def available(self) -> bool:
+        return super().available and bool(self.data.get("channel"))
+
+    @property
+    def options(self) -> list[str]:
+        channel = self.data.get("channel") or {}
+        options = list(channel.get("channels") or [])
+        if channel.get("channel") and channel["channel"] not in options:
+            options.append(channel["channel"])
+        return options or ["-"]
+
+    @property
+    def current_option(self) -> str | None:
+        return (self.data.get("channel") or {}).get("channel")
+
+    async def async_select_option(self, option: str) -> None:
+        await self.coordinator.set_channel(option)
+
+
 def selects(device: OvosDevice, cap: str) -> list:
     if cap != CAP_PANEL:
         return []
-    return [PanelSelect(device, name, label) for name, (kind, label) in QUICK.items()
-            if kind == "select"]
+    return [*(PanelSelect(device, name, label) for name, (kind, label) in QUICK.items()
+              if kind == "select"), PanelChannel(device)]
 
 
 def texts(device: OvosDevice, cap: str) -> list:
@@ -213,7 +245,8 @@ class PanelSkill(PanelEntity, SwitchEntity):
         super().__init__(device, f"panel_skill_{skill_id}")
         self._skill = skill_id
         self._attr_translation_key = None
-        self._attr_name = skill_id
+        self._attr_name = prettify_skill_id(skill_id)
+        self._attr_extra_state_attributes = {"skill_id": skill_id}
 
     @property
     def is_on(self) -> bool | None:
@@ -238,6 +271,154 @@ def setup_skill_switches(device: OvosDevice, add_entities) -> None:
         if new:
             added.update(new)
             add_entities([PanelSkill(device, sid) for sid in new])
+
+    device.entry.async_on_unload(coord.async_add_listener(add_new))
+    add_new()
+
+
+# --- skill settings ---------------------------------------------------------------
+# One entity per field of a skill's settingsmeta, as the panel's skill page
+# shows them. A skill that has no settingsmeta gets one generated from its
+# settings.json; those entities start disabled, since nobody chose to show them.
+
+def _truthy(value: Any) -> bool:
+    return value is True or str(value).lower() in ("true", "1", "yes", "on")
+
+
+class PanelSkillSetting(PanelEntity):
+    def __init__(self, device: OvosDevice, skill_id: str, field: dict[str, Any],
+                 generated: bool) -> None:
+        super().__init__(device, f"panel_setting_{skill_id}_{field['name']}")
+        self._skill = skill_id
+        self._field = field
+        self._attr_translation_key = None
+        self._attr_name = f"{prettify_skill_id(skill_id)}: {field['label']}"
+        self._attr_entity_registry_enabled_default = not generated
+        self._attr_extra_state_attributes = {"skill_id": skill_id, "setting": field["name"]}
+
+    @property
+    def _info(self) -> dict[str, Any]:
+        return self.coordinator.settings.get(self._skill) or {}
+
+    @property
+    def _value(self) -> Any:
+        settings = self._info.get("settings") or {}
+        return settings.get(self._field["name"], self._field.get("default"))
+
+    @property
+    def available(self) -> bool:
+        return self.device.available and bool(self._info)
+
+    async def _write(self, value: Any) -> None:
+        await self.coordinator.set_skill_setting(self._skill, self._field["name"], value)
+
+
+class PanelSettingSwitch(PanelSkillSetting, SwitchEntity):
+    @property
+    def is_on(self) -> bool | None:
+        return None if self._value is None else _truthy(self._value)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._write(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._write(False)
+
+
+class PanelSettingNumber(PanelSkillSetting, NumberEntity):
+    # settingsmeta has no range; the panel's form doesn't either
+    _attr_mode = NumberMode.BOX
+    _attr_native_min_value = -1_000_000
+    _attr_native_max_value = 1_000_000
+
+    @property
+    def native_step(self) -> float:
+        return 1 if isinstance(self._value, int) or self._value is None else 0.01
+
+    @property
+    def native_value(self) -> float | None:
+        try:
+            return None if self._value in (None, "") else float(self._value)
+        except (TypeError, ValueError):
+            return None
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self._write(int(value) if value.is_integer() and not isinstance(self._value, float)
+                          else value)
+
+
+class PanelSettingText(PanelSkillSetting, TextEntity):
+    """A text setting. A secret (a password field, or a name with key,
+    token, secret or password in it) can be set from HA but is never read
+    back: an entity's state is stored in the recorder and visible to anyone
+    who can see the device."""
+
+    _attr_native_max = 255
+
+    def __init__(self, *args: Any) -> None:
+        super().__init__(*args)
+        name = self._field["name"].lower()
+        self._secret = (self._field["type"] == "password"
+                        or any(h in name for h in SENSITIVE_NAME_HINTS))
+        if self._secret:
+            self._attr_mode = TextMode.PASSWORD
+            self._attr_icon = "mdi:key-variant"
+
+    @property
+    def native_value(self) -> str | None:
+        if self._secret or self._value is None:
+            return None
+        return str(self._value)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        attrs = dict(super().extra_state_attributes or {})
+        if self._secret:
+            attrs["is_set"] = bool(self._value)
+        return attrs
+
+    async def async_set_value(self, value: str) -> None:
+        await self._write(value)
+
+
+class PanelSettingSelect(PanelSkillSetting, SelectEntity):
+    @property
+    def options(self) -> list[str]:
+        return [label for label, _ in self._field["options"]]
+
+    @property
+    def current_option(self) -> str | None:
+        value = None if self._value is None else str(self._value)
+        return next((label for label, v in self._field["options"] if v == value), None)
+
+    async def async_select_option(self, option: str) -> None:
+        value = next(v for label, v in self._field["options"] if label == option)
+        await self._write(value)
+
+
+SETTING_ENTITIES = {"switch": PanelSettingSwitch, "number": PanelSettingNumber,
+                    "text": PanelSettingText, "select": PanelSettingSelect}
+
+
+def setup_skill_settings(device: OvosDevice, add_entities, kind: str) -> None:
+    """The skills' settings of one kind, added as the panel reports them."""
+    coord = coordinator(device)
+    if kind in coord.setting_kinds:     # the capability can be announced again
+        return
+    coord.setting_kinds.add(kind)
+    added: set[tuple[str, str]] = set()
+    cls = SETTING_ENTITIES[kind]
+
+    @callback
+    def add_new() -> None:
+        new = []
+        for sid, info in coord.settings.items():
+            for field in info["fields"]:
+                if field["kind"] == kind and (sid, field["name"]) not in added:
+                    added.add((sid, field["name"]))
+                    new.append(cls(device, sid, field, info["generated"]))
+        if new:
+            add_entities(new)
 
     device.entry.async_on_unload(coord.async_add_listener(add_new))
     add_new()

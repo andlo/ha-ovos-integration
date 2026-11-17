@@ -56,9 +56,32 @@ device's connection, so the panel is never opened on the network:
 | `select` **Units**, **Time format**, **Date format** | the Simple tab |
 | `select` **Voice**, **Speech to text**, **Wake word**, **Voice activity detection** | the plugins and wake words the device has |
 | `switch` per skill | the skill on or off (`skills.blacklisted_skills`) |
+| `switch` / `number` / `text` / `select` per skill setting | the skill's page: one entity per field of its `settingsmeta` |
+| `select` **Release channel** | Updates: the channel packages come from (stable, alpha) |
 | `binary_sensor` **Problem** | the dashboard: the bus or an essential service not answering |
 | `sensor` **Updates available** | OVOS packages with a newer version on the device's channel |
 | `button` **Restart OVOS**, **Reboot** | the panel's system actions (they need the panel's token) |
+
+### Skill settings
+
+Each field of a skill's settingsmeta becomes an entity named after the skill
+and the field (*Weather: Units*): a checkbox a `switch`, a number a `number`,
+a select a `select` with its choices, the rest a `text`. A skill without a
+settingsmeta gets one made from its `settings.json`, the way the panel does
+it; those entities start **disabled**, since the skill didn't choose to show
+them – enable the ones you want. What's left out: keys starting with `_`
+(OVOS' own bookkeeping) and nested values (lists, objects); the panel's raw
+editor is for those.
+
+A secret – a password field, or a name with *key*, *token*, *secret* or
+*password* in it – can be set from HA but is never read back: the entity's
+state stays empty (with `is_set` as an attribute), because a state is kept in
+the recorder and shown to anyone who can see the device.
+
+A change is merged into `settings.json` by the panel, so what the skill
+itself wrote meanwhile (tokens, counters) is kept. HA reads the settings in
+the background, one skill at a time, when the device connects, when a skill
+is installed, and every half hour.
 
 ## The network log
 
@@ -113,12 +136,9 @@ automation:
 
 ## Not there yet (missing on the bus)
 
-- **Language, voice, STT, wake word** as `select`s: OVOS has no bus message to
-  *read* the configuration, and `configuration.patch` only changes it in memory
-  in the process that gets it. Needs a small PHAL plugin ("config get/set over
-  the bus"), so it works for every OVOS.
-- **Skill settings** per device: as above – over the bus, not install-specific
-  APIs. The add-on entry still has them for haos-ovos-addons.
+- **Language, voice, STT, wake word, skill settings** without the control
+  panel: OVOS has no bus message to *read* the configuration. With the panel
+  (above) they are there.
 - **Other things a device can switch** (beyond local only and keep screen on):
   a general "announce a capability" message, like `ovos.phal.sensor` but for
   switches/buttons, would let devices add their own without the integration

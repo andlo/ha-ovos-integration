@@ -16,6 +16,7 @@ from .panel import CAP_PANEL
 async def async_setup_entry(hass, entry, add_entities):
     def factory(device: OvosDevice, cap: str):
         if cap == CAP_PANEL:
+            panel_entities.setup_skill_settings(device, add_entities, "select")
             return panel_entities.selects(device, cap)
         if cap != CAP_SATELLITE:
             return []
