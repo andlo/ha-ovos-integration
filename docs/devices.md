@@ -47,8 +47,10 @@ HA sends without a session, which OVOS treats as the default (the device's own).
 A device that sends audio (Emkay does) is also an ordinary Assist device:
 an `assist_satellite` entity with the *Assistant* (pipeline) and *Finished
 speaking detection* selects next to it, `assist_satellite.announce` and
-`start_conversation` from automations, and timers ("set a timer for ten
-minutes" – it says when it's done). See [protocol.md](protocol.md#5-as-an-assist-satellite).
+`start_conversation` from automations, timers ("set a timer for ten
+minutes" – it says when it's done), the wake word chosen in HA from the ones
+the device has, and a `media_player` for its speaker (sounds, radio and
+music from HA). See [protocol.md](protocol.md#5-as-an-assist-satellite).
 
 ## Night mode
 

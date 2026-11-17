@@ -195,6 +195,11 @@
           "relaxed": "Relaxed"
         }
       }
+    },
+    "media_player": {
+      "media_player": {
+        "name": "Media player"
+      }
     }
   },
   "services": {

@@ -33,6 +33,7 @@ from homeassistant.components.assist_satellite import (
     AssistSatelliteConfiguration,
     AssistSatelliteEntity,
     AssistSatelliteEntityFeature,
+    AssistSatelliteWakeWord,
 )
 from homeassistant.components.intent import (
     TimerEventType,
@@ -105,12 +106,27 @@ class OvosSatellite(OvosDeviceEntity, AssistSatelliteEntity):
                 self.hass, self.device_entry.id, self._on_timer))
 
     def async_get_configuration(self) -> AssistSatelliteConfiguration:
-        # the wake word is on the device, not chosen in HA (yet)
+        """The wake words the device has (it listens for them itself); one at a time."""
+        info = self.device.info
         return AssistSatelliteConfiguration(
-            available_wake_words=[], active_wake_words=[], max_active_wake_words=0)
+            available_wake_words=[
+                AssistSatelliteWakeWord(id=w["id"], wake_word=w["wake_word"],
+                                        trained_languages=w.get("languages", []))
+                for w in info.get("wake_words", [])
+            ],
+            active_wake_words=[info["wake_word"]] if info.get("wake_word") else [],
+            max_active_wake_words=1,
+        )
 
     async def async_set_configuration(self, config: AssistSatelliteConfiguration) -> None:
-        """Nothing to set: see async_get_configuration."""
+        """A wake word chosen in HA: the device switches to it."""
+        if not config.active_wake_words:
+            return
+        wake_word = config.active_wake_words[0]
+        if wake_word not in {w["id"] for w in self.device.info.get("wake_words", [])}:
+            raise ValueError(f"{self.device.entry.title} has no wake word {wake_word}")
+        self.device.info["wake_word"] = wake_word
+        self.device.send_event({"type": "wake_word", "id": wake_word})
 
     # --- pipeline runs (satellite.py's ovos/satellite/run) -------------------
 

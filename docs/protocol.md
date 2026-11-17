@@ -164,6 +164,21 @@ playing an answer, so the satellite goes back to idle;
 |---|---|
 | `{"type": "announce", "id": n, "message": "…", "media_url": "/api/ovos/tts/…", "preannounce_url": …, "start_conversation": false}` | play it (or say `message`), then `ovos/satellite/done` with `what: "announce"`. With `start_conversation: true`, listen right after it without the wake word, and send the answer as a normal run |
 | `{"type": "timer", "event": "started" \| "updated" \| "cancelled" \| "finished", "timer": {id, name, seconds_left, is_active, total_seconds}}` | timers set on this device; on `finished`, let the user know |
+| `{"type": "wake_word", "id": "hey_jarvis"}` | the wake word was chosen in HA (one of the device's `wake_words`); switch to it and use it from now on |
+| `{"type": "media", "command": "play", "url": "/api/…", "announce": false}` / `"pause"` / `"resume"` / `"stop"` | the satellite's media player (`media_player.play_media`, media sources). A relative `url` is on HA; it's already signed where needed. Report the state with `ovos/satellite/media` |
+
+### Wake words
+
+In `ovos/connect`, a satellite can list the wake words it can listen for and
+the one in use: `"wake_words": [{"id": "hey_emkay", "wake_word": "Hey Emkay"}, …],
+"wake_word": "hey_emkay"`. HA shows them in the satellite's configuration
+(one at a time) and sends `wake_word` when another is chosen.
+
+### `ovos/satellite/media` – what the media player is doing
+
+`{"type": "ovos/satellite/media", "device_id": "…", "state": "playing" | "paused" | "idle", "url": "…"}`
+whenever it changes. The volume is the device's own, set over the bus
+(`mycroft.volume.*`).
 
 The idea of a browser as an Assist satellite over HA's WebSocket API comes
 from [Voice Satellite](https://github.com/jxlarrea/voice-satellite-card-integration).

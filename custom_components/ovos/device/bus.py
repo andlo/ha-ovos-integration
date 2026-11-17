@@ -98,6 +98,8 @@ class OvosDevice:
         self.transport: Transport | None = None
         self.info: dict[str, Any] = {}
         self.satellite = None   # its assist_satellite entity, when it is one (#11)
+        self.media_state: str | None = None   # its media player: playing / paused / idle
+        self.media_url: str | None = None
 
         self.capabilities: set[str] = set(entry.data.get(CONF_CAPABILITIES, []))
         # sensor_id -> {"binary": bool, "name": str, "state": ..., "attributes": {}}
@@ -337,6 +339,11 @@ class OvosDevice:
         if self._thinking_timer is not None:
             self._thinking_timer()
             self._thinking_timer = None
+
+    @callback
+    def set_media(self, state: str, url: str | None) -> None:
+        self.media_state, self.media_url = state, url
+        self._notify()
 
     def _notify(self) -> None:
         for fn in list(self._update_listeners):

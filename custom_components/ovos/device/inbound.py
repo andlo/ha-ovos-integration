@@ -51,6 +51,7 @@ from ..const import (
 )
 from .bus import FORWARD_TYPES, OvosDevice
 from .satellite import async_setup_satellite_ws
+from ..registry import get_device
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,6 +70,13 @@ CONNECT_SCHEMA = {
     vol.Optional("lang"): vol.All(str, vol.Length(max=16)),
     # it sends audio and wants to be an Assist satellite (#11)
     vol.Optional("satellite"): bool,
+    # the wake words it can listen for, and the one it uses (#11): chosen in HA
+    vol.Optional("wake_words"): [vol.Schema({
+        vol.Required("id"): vol.All(str, vol.Length(max=64)),
+        vol.Required("wake_word"): vol.All(str, vol.Length(max=64)),
+        vol.Optional("languages"): [str],
+    })],
+    vol.Optional("wake_word"): vol.All(str, vol.Length(max=64)),
 }
 
 BUS_SCHEMA = {
@@ -120,7 +128,7 @@ class InboundHub:
         if conn is None or device is None:
             return
         _update_device_info(self.hass, device.entry, conn.info)
-        ha_device = dr.async_get(self.hass).async_get_device({(DOMAIN, device_id)})
+        ha_device = get_device(self.hass, (DOMAIN, device_id), device.entry.entry_id)
         # ready first: attach() asks the device what it can do at once, and
         # a client only answers once it has heard ready (and its forward list)
         conn.send_event({
@@ -173,7 +181,7 @@ def _update_device_info(hass: HomeAssistant, entry: ConfigEntry, info: dict) -> 
     if any(entry.data.get(k) != v for k, v in new.items()):
         hass.config_entries.async_update_entry(entry, data={**entry.data, **new})
         registry = dr.async_get(hass)
-        if (device := registry.async_get_device({(DOMAIN, entry.data[CONF_DEVICE_ID])})):
+        if (device := get_device(hass, (DOMAIN, entry.data[CONF_DEVICE_ID]), entry.entry_id)):
             registry.async_update_device(
                 device.id,
                 model=new.get(CONF_MODEL, device.model),

@@ -104,7 +104,23 @@ def ws_done(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg
     connection.send_result(msg["id"])
 
 
+@websocket_api.websocket_command({
+    vol.Required("type"): "ovos/satellite/media",
+    vol.Required("device_id"): str,
+    vol.Required("state"): vol.In(["playing", "paused", "idle"]),
+    vol.Optional("url"): vol.Any(str, None),
+})
+@callback
+def ws_media(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """What the device's media player is doing (media_player.py)."""
+    if (satellite := _satellite(hass, connection, msg)) is None:
+        return
+    satellite.device.set_media(msg["state"], msg.get("url"))
+    connection.send_result(msg["id"])
+
+
 @callback
 def async_setup_satellite_ws(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_run)
     websocket_api.async_register_command(hass, ws_done)
+    websocket_api.async_register_command(hass, ws_media)
