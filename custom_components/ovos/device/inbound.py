@@ -24,12 +24,15 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from aiohttp import web
 import voluptuous as vol
+
+from homeassistant.components.http import KEY_HASS, HomeAssistantView
 
 from homeassistant.components import websocket_api
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY, ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import discovery_flow
+from homeassistant.helpers import device_registry as dr, discovery_flow
 
 from ..const import (
     CONF_DEVICE_ID,
@@ -115,10 +118,14 @@ class InboundHub:
             return
         device.attach(conn, conn.info)
         _update_device_info(self.hass, device.entry, conn.info)
+        ha_device = dr.async_get(self.hass).async_get_device({(DOMAIN, device_id)})
         conn.send_event({
             "type": "ready",
             "protocol": PROTOCOL_VERSION,
             "entry_id": device.entry.entry_id,
+            # HA's own id for the device: give it as device_id to
+            # assist_pipeline/run, so Assist knows where it was asked (area)
+            "device_id": ha_device.id if ha_device else None,
             "forward": FORWARD_TYPES,
         })
 
@@ -158,7 +165,6 @@ def _update_device_info(hass: HomeAssistant, entry: ConfigEntry, info: dict) -> 
     new = {k: info[k] for k in (CONF_MODEL, CONF_MANUFACTURER, CONF_SW_VERSION) if k in info}
     if any(entry.data.get(k) != v for k, v in new.items()):
         hass.config_entries.async_update_entry(entry, data={**entry.data, **new})
-        from homeassistant.helpers import device_registry as dr
         registry = dr.async_get(hass)
         if (device := registry.async_get_device({(DOMAIN, entry.data[CONF_DEVICE_ID])})):
             registry.async_update_device(
@@ -244,8 +250,34 @@ def ws_bus(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
     connection.send_result(msg["id"])
 
 
+class OvosTtsView(HomeAssistantView):
+    """HA's TTS audio (tts-end's token), with CORS.
+
+    /api/tts_proxy/<token> has no CORS headers, so a page on another site
+    (Emkay at app.emkay.ai) can't fetch it to play it through its own
+    speaker -- the face's mouth and the volume go through Web Audio, which
+    needs the bytes. Same content, same unguessable token, nothing more.
+    """
+
+    url = "/api/ovos/tts/{token}"
+    name = "api:ovos:tts"
+    requires_auth = False
+    cors_allowed = True
+
+    async def get(self, request: web.Request, token: str) -> web.StreamResponse:
+        hass = request.app[KEY_HASS]
+        try:
+            from homeassistant.components.tts import TextToSpeechView
+            from homeassistant.components.tts.const import DATA_TTS_MANAGER
+            manager = hass.data[DATA_TTS_MANAGER]
+        except (ImportError, KeyError):
+            return web.Response(status=404)
+        return await TextToSpeechView(manager).get(request, token)
+
+
 @callback
 def async_setup_inbound(hass: HomeAssistant) -> None:
     hass.data[DOMAIN][DATA_INBOUND_HUB] = InboundHub(hass)
+    hass.http.register_view(OvosTtsView())
     websocket_api.async_register_command(hass, ws_connect)
     websocket_api.async_register_command(hass, ws_bus)

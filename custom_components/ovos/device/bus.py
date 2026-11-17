@@ -270,8 +270,11 @@ class OvosDevice:
         attributes = data.get("attributes")
         known = self.sensors.get(sensor_id)
         if known is None:
+            # ovos-PHAL-sensors puts the readable name in friendly_name
+            # ("Battery Level"); `name` is the bare reading ("level")
+            name = (attributes or {}).get("friendly_name") if isinstance(attributes, dict) else None
             known = self.sensors[sensor_id] = {
-                "binary": binary, "name": str(data.get("name") or sensor_id),
+                "binary": binary, "name": str(name or data.get("name") or sensor_id),
             }
             self._save()
             async_dispatcher_send(
