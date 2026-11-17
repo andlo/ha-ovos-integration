@@ -245,9 +245,13 @@ async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnec
                                   "connect the hub (via_device) on this connection first")
             return
         if entry is not None and entry.data.get(CONF_VIA_DEVICE) != via:
-            connection.send_error(msg["id"], websocket_api.ERR_UNAUTHORIZED,
-                                  "this device is not a satellite of that hub")
-            return
+            # paired with another hub now (a new house): it moves along. The
+            # user check above already says this user may connect it.
+            hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_VIA_DEVICE: via})
+            registry = dr.async_get(hass)
+            hub_device = get_device(hass, (DOMAIN, via), _find_entry(hass, via).entry_id)
+            if hub_device and (device := get_device(hass, (DOMAIN, device_id), entry.entry_id)):
+                registry.async_update_device(device.id, via_device_id=hub_device.id)
 
     info = {k: v for k, v in msg.items() if k not in ("id", "type", "protocol")}
     conn = InboundConnection(connection, msg["id"], info)
