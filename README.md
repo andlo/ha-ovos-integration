@@ -6,16 +6,21 @@
 
 Each OVOS shows up as a **device**, with what can be seen and set on it as entities – volume, listening on/off, state, last question and answer, its own sensors – so automations can turn off listening at night, turn the volume down, make it say something or ask it something. Everything comes from the OVOS bus, which every OVOS speaks, so it is the same whatever kind of OVOS it is.
 
-Devices that send audio, like [Emkay](https://emkay.ai), are also **Assist satellites**: pick their pipeline in HA, announce on them, start a conversation, set timers ([#11](https://github.com/andlo/ha-ovos-integration/issues/11)).
+With [ovos-control-panel](https://github.com/OpenVoiceOS/ovos-control-panel) on the device, HA also gets what the panel can set – language, units, voice, speech to text, wake word, skills on and off, **each skill's settings**, the release channel – and its health, updates, restart and reboot, and **backups** kept in HA. The device's **network log** (what it sent out, to whom) comes along as an event and sensors.
 
-> Work in progress ([#7](https://github.com/andlo/ha-ovos-integration/issues/7)). Today a device connects **to** Home Assistant ([#9](https://github.com/andlo/ha-ovos-integration/issues/9)) – the way for browsers and devices behind NAT. Home Assistant connecting to an OVOS over HiveMind ([#8](https://github.com/andlo/ha-ovos-integration/issues/8)) and Emkay Home with its satellites ([#12](https://github.com/andlo/ha-ovos-integration/issues/12)) come next.
+Devices that send audio, like [Emkay](https://emkay.ai), are also **Assist satellites**: pick their pipeline in HA, announce on them, start a conversation, set timers.
+
+A **HiveMind master with satellites** – [Emkay Home](https://github.com/emkay-voice/emkay-home), or any hivemind-core – brings each satellite along as a device of its own, *connected via* the hub: the kitchen tablet, the bedroom phone, a Pi.
+
+The device connects **to** Home Assistant, so it works for browsers and behind NAT, and no port is opened on the device. Home Assistant connecting to an OVOS over HiveMind itself is [#8](https://github.com/andlo/ha-ovos-integration/issues/8).
 
 ## OpenVoiceOS devices
 
 1. Add the **OpenVoiceOS** integration and choose **An OpenVoiceOS device**. This lets devices connect to this Home Assistant.
 2. Point the device at Home Assistant and log in:
-   - **Emkay**: ⚙ → *Where should Emkay think?* → Home Assistant.
-   - **Any other OVOS**: run [`tools/ovos_ha_bridge.py`](tools/ovos_ha_bridge.py) next to it with a long-lived token.
+   - **Emkay**: ⚙ → *Where should Emkay think?* → *Connect to my Home Assistant* (with Emkay thinking on the device), or Home Assistant as the brain (an Assist satellite).
+   - **Emkay Home**: the **Home Assistant** card on the house page. Its Emkays come along by themselves.
+   - **Any other OVOS**: [ovos-phal-plugin-ha-link](https://github.com/andlo/ovos-phal-plugin-ha-link), a PHAL plugin, with Home Assistant's address and a long-lived token in `mycroft.conf`. With [ovos-assist-pipeline-plugin](https://github.com/emkay-voice/ovos-assist-pipeline-plugin) next to it, what Assist knows ("turn off the light on the stairs") goes to Home Assistant. ([`tools/ovos_ha_bridge.py`](tools/ovos_ha_bridge.py) is a small reference client.)
 3. The device appears under **Settings → Devices & services → Discovered**. Add it.
 
 - [docs/devices.md](docs/devices.md) – the entities and actions, and the bus messages behind them
